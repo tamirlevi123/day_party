@@ -1,0 +1,33 @@
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
+*.log
+*.bak
+
+# Node modules (if we add any tooling)
+node_modules/
+
+# Environment files
+.env
+.env.local
+
+# Build artifacts (if we add build tools later)
+dist/
+build/
+
