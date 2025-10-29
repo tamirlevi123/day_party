@@ -18,6 +18,9 @@ Use this index to navigate key deliverables. Keep entries concise and link out.
 - 13 Wireframes — `13-Wireframes.md`
 - 14 Design System — `14-Design-System.md`
 - 15 Analytics Plan — `15-Analytics-Plan.md`
+- 16 Azure Hosting Options — `16-Azure-Hosting-Options.md`
+- 17 Backend Framework Alternatives — `17-Backend-Framework-Alternatives.md`
+- 18 Node.js Backend Stack — `18-NodeJS-Backend-Stack.md`
 
 ### Working Conventions
 - **Source of truth**: Creative Brief and Decision Log.
