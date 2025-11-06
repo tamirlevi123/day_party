@@ -1,0 +1,390 @@
+// Prisma schema for Day Party Platform
+// Maps to MySQL 8+ database with utf8mb4 encoding
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// Users and Authentication
+// ============================================================================
+
+model User {
+  id           String   @id @default(uuid()) @db.Char(36)
+  email        String?  @unique @map("email") @db.VarChar(255)
+  phone        String?  @unique @map("phone") @db.VarChar(50)
+  passwordHash String?  @map("password_hash") @db.VarChar(255)
+  displayName  String   @map("display_name") @db.VarChar(255)
+  locale       String   @default("he-IL") @db.VarChar(10)
+  isActive     Boolean  @default(true) @map("is_active")
+  role         Role     @default(user)
+  createdAt    DateTime @default(now()) @map("created_at") @db.DateTime
+
+  // Relations
+  identities         UserIdentity[]
+  topics             Topic[]
+  threads            Thread[]
+  nodes              Node[]
+  nodeVotes          NodeVote[]
+  topicRoles         TopicRole[]
+  modalityJobs       ModalityGenerationJob[]
+  reports            Report[] @relation("Reporter")
+  resolvedReports    Report[] @relation("Resolver")
+  nodeVersions       NodeVersion[]
+  notifications      Notification[]
+
+  @@index([role])
+  @@index([isActive])
+  @@map("users")
+}
+
+model UserIdentity {
+  id                String    @id @default(uuid()) @db.Char(36)
+  userId            String    @map("user_id") @db.Char(36)
+  provider          Provider
+  providerUserId    String    @map("provider_user_id") @db.VarChar(255)
+  email             String?   @db.VarChar(255)
+  displayName       String?   @map("display_name") @db.VarChar(255)
+  accessTokenLast4  String?   @map("access_token_last4") @db.VarChar(4)
+  refreshTokenLast4 String?   @map("refresh_token_last4") @db.VarChar(4)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.DateTime
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerUserId])
+  @@index([userId])
+  @@map("user_identities")
+}
+
+// ============================================================================
+// Topics and Threads
+// ============================================================================
+
+model Topic {
+  id          String     @id @default(uuid()) @db.Char(36)
+  name        String     @db.VarChar(255)
+  description String     @db.Text
+  visibility  Visibility @default(public)
+  createdBy   String     @map("created_by") @db.Char(36)
+  createdAt   DateTime   @default(now()) @map("created_at") @db.DateTime
+
+  // Relations
+  creator  User        @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  threads  Thread[]
+  topicRoles TopicRole[]
+
+  @@index([visibility])
+  @@index([createdBy])
+  @@map("topics")
+}
+
+model TopicRole {
+  id        String   @id @default(uuid()) @db.Char(36)
+  topicId   String   @map("topic_id") @db.Char(36)
+  userId    String   @map("user_id") @db.Char(36)
+  role      TopicRoleType @default(admin)
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime
+
+  // Relations
+  topic Topic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([topicId, userId, role])
+  @@map("topic_roles")
+}
+
+model Thread {
+  id          String     @id @default(uuid()) @db.Char(36)
+  topicId     String     @map("topic_id") @db.Char(36)
+  title       String     @db.VarChar(500)
+  description String?    @db.Text
+  createdBy   String     @map("created_by") @db.Char(36)
+  status      ThreadStatus @default(open)
+  createdAt   DateTime   @default(now()) @map("created_at") @db.DateTime
+
+  // Relations
+  topic Topic @relation(fields: [topicId], references: [id], onDelete: Restrict)
+  creator User @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  nodes  Node[]
+
+  @@index([topicId])
+  @@index([createdBy])
+  @@map("threads")
+}
+
+// ============================================================================
+// Nodes (Tree Structure for Posts/Comments with Voting)
+// ============================================================================
+
+model Node {
+  id                      String           @id @default(uuid()) @db.Char(36)
+  threadId                String           @map("thread_id") @db.Char(36)
+  parentNodeId            String?          @map("parent_node_id") @db.Char(36)
+  parentRelation          ParentRelation?  @map("parent_relation")
+  title                   String           @db.VarChar(500)
+  
+  // Content modalities
+  textContent             String?          @map("text_content") @db.Text
+  textFormat              TextFormat       @default(plain) @map("text_format")
+  videoUrl                String?          @map("video_url") @db.VarChar(2048)
+  videoDurationSec        Int?             @map("video_duration_sec")
+  videoThumbnailUrl       String?          @map("video_thumbnail_url") @db.VarChar(2048)
+  
+  // Metadata
+  textLanguage            String?          @map("text_language") @db.VarChar(10)
+  textConfidence          Decimal?         @map("text_confidence") @db.Decimal(5, 4)
+  textStatus              ContentStatus    @default(missing) @map("text_status")
+  videoStatus             ContentStatus    @default(missing) @map("video_status")
+  
+  // Moderation
+  moderationState         ModerationState  @default(visible) @map("moderation_state")
+  isAnonymous             Boolean          @default(false) @map("is_anonymous")
+  authorId                String?          @map("author_id") @db.Char(36)
+  isDeleted               Boolean          @default(false) @map("is_deleted")
+  
+  // Voting configuration
+  votingEnabled           Boolean          @default(true) @map("voting_enabled")
+  votingClosesAt          DateTime?        @map("voting_closes_at") @db.DateTime
+  votingRequiredQuorum    Int?             @map("voting_required_quorum")
+  votingDefaultPublic     Boolean          @default(false) @map("voting_default_public")
+  votingEligibilityMinAccountAgeDays Int?  @map("voting_eligibility_min_account_age_days")
+  
+  // Denormalized tallies
+  likeCount               Int              @default(0) @map("like_count")
+  dislikeCount            Int              @default(0) @map("dislike_count")
+  abstainCount            Int              @default(0) @map("abstain_count")
+  
+  // Timestamps
+  createdAt               DateTime         @default(now()) @map("created_at") @db.DateTime
+  editedAt                DateTime?        @map("edited_at") @db.DateTime
+  
+  // Relations
+  thread      Thread      @relation(fields: [threadId], references: [id], onDelete: Restrict)
+  parent      Node?       @relation("NodeTree", fields: [parentNodeId], references: [id], onDelete: Cascade)
+  children    Node[]      @relation("NodeTree")
+  author      User?       @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  votes       NodeVote[]
+  versions    NodeVersion[]
+  modalityJobs ModalityGenerationJob[]
+
+  @@index([threadId])
+  @@index([parentNodeId])
+  @@index([authorId])
+  @@index([moderationState])
+  @@index([isDeleted])
+  @@index([votingClosesAt])
+  @@map("nodes")
+}
+
+model NodeVersion {
+  id               String           @id @default(uuid()) @db.Char(36)
+  nodeId           String           @map("node_id") @db.Char(36)
+  versionNumber    Int              @map("version_number")
+  title            String           @db.VarChar(500)
+  textContent      String?          @map("text_content") @db.Text
+  textFormat       TextFormat       @map("text_format")
+  videoUrl         String?          @map("video_url") @db.VarChar(2048)
+  videoDurationSec Int?             @map("video_duration_sec")
+  videoThumbnailUrl String?         @map("video_thumbnail_url") @db.VarChar(2048)
+  textLanguage     String?          @map("text_language") @db.VarChar(10)
+  textConfidence   Decimal?         @map("text_confidence") @db.Decimal(5, 4)
+  textStatus       ContentStatus    @map("text_status")
+  videoStatus      ContentStatus    @map("video_status")
+  moderationState  ModerationState  @map("moderation_state")
+  editedBy         String?          @map("edited_by") @db.Char(36)
+  editedAt         DateTime         @default(now()) @map("edited_at") @db.DateTime
+  changeSummary    String?          @map("change_summary") @db.Text
+
+  // Relations
+  node   Node  @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  editor User? @relation(fields: [editedBy], references: [id], onDelete: SetNull)
+
+  @@unique([nodeId, versionNumber])
+  @@index([nodeId, versionNumber(sort: Desc)])
+  @@map("node_versions")
+}
+
+model NodeVote {
+  id        String      @id @default(uuid()) @db.Char(36)
+  nodeId    String      @map("node_id") @db.Char(36)
+  userId    String      @map("user_id") @db.Char(36)
+  type      VoteType
+  isPublic  Boolean     @default(false) @map("is_public")
+  createdAt DateTime    @default(now()) @map("created_at") @db.DateTime
+  updatedAt DateTime    @updatedAt @map("updated_at") @db.DateTime
+
+  // Relations
+  node Node @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([nodeId, userId])
+  @@index([nodeId])
+  @@index([userId])
+  @@index([nodeId, isPublic])
+  @@map("node_votes")
+}
+
+// ============================================================================
+// Modality Generation Jobs
+// ============================================================================
+
+model ModalityGenerationJob {
+  id             String      @id @default(uuid()) @db.Char(36)
+  nodeId         String      @map("node_id") @db.Char(36)
+  targetModality TargetModality @map("target_modality")
+  source         JobSource
+  status         JobStatus
+  requestedBy    String?     @map("requested_by") @db.Char(36)
+  createdAt      DateTime    @default(now()) @map("created_at") @db.DateTime
+  completedAt    DateTime?   @map("completed_at") @db.DateTime
+  notes          String?     @db.Text
+
+  // Relations
+  node  Node  @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  requester User? @relation(fields: [requestedBy], references: [id], onDelete: SetNull)
+
+  @@index([nodeId, targetModality])
+  @@index([status])
+  @@map("modality_generation_jobs")
+}
+
+// ============================================================================
+// Reports and Moderation
+// ============================================================================
+
+model Report {
+  id          String      @id @default(uuid()) @db.Char(36)
+  targetType  TargetType  @map("target_type")
+  targetId    String      @map("target_id") @db.Char(36)
+  reporterId  String      @map("reporter_id") @db.Char(36)
+  reason      String      @db.Text
+  status      ReportStatus @default(open)
+  createdAt   DateTime    @default(now()) @map("created_at") @db.DateTime
+  resolvedBy  String?     @map("resolved_by") @db.Char(36)
+  resolvedAt  DateTime?   @map("resolved_at") @db.DateTime
+
+  // Relations
+  reporter User @relation("Reporter", fields: [reporterId], references: [id], onDelete: Restrict)
+  resolver User? @relation("Resolver", fields: [resolvedBy], references: [id], onDelete: SetNull)
+
+  @@index([targetType, targetId])
+  @@index([status])
+  @@index([reporterId])
+  @@map("reports")
+}
+
+// ============================================================================
+// Notifications
+// ============================================================================
+
+model Notification {
+  id         String   @id @default(uuid()) @db.Char(36)
+  userId     String   @map("user_id") @db.Char(36)
+  type       String   @db.VarChar(100)
+  payloadJson Json    @map("payload_json")
+  isRead     Boolean  @default(false) @map("is_read")
+  createdAt  DateTime @default(now()) @map("created_at") @db.DateTime
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+// ============================================================================
+// Enums
+// ============================================================================
+
+enum Role {
+  user
+  admin
+}
+
+enum Provider {
+  google
+  facebook
+  apple
+}
+
+enum Visibility {
+  public
+  private
+}
+
+enum TopicRoleType {
+  admin
+}
+
+enum ThreadStatus {
+  open
+  closed
+}
+
+enum ParentRelation {
+  pro
+  against
+  neutral
+}
+
+enum TextFormat {
+  markdown
+  plain
+  html
+}
+
+enum ContentStatus {
+  provided
+  generated
+  missing
+}
+
+enum ModerationState {
+  visible
+  limited
+  hidden
+  removed
+}
+
+enum VoteType {
+  like
+  dislike
+  abstain
+}
+
+enum TargetModality {
+  text
+  video
+}
+
+enum JobSource {
+  ai
+  human
+}
+
+enum JobStatus {
+  queued
+  in_progress
+  succeeded
+  failed
+}
+
+enum TargetType {
+  thread
+  node
+}
+
+enum ReportStatus {
+  open
+  reviewing
+  resolved
+  rejected
+}
+

@@ -21,6 +21,11 @@ Use this index to navigate key deliverables. Keep entries concise and link out.
 - 16 Azure Hosting Options — `16-Azure-Hosting-Options.md`
 - 17 Backend Framework Alternatives — `17-Backend-Framework-Alternatives.md`
 - 18 Node.js Backend Stack — `18-NodeJS-Backend-Stack.md`
+- 19 Azure Container Apps Detailed — `19-Azure-Container-Apps-Detailed.md`
+- 20 Azure VM Setup — `20-Azure-VM-Setup.md`
+- 21 Backend Deployment Status — `21-Backend-Deployment-Status.md`
+- 22 Android Project Plan — `22-Android-Project-Plan.md`
+- 23 Android Gradle Tasks — `23-Android-Gradle-Tasks.md`
 
 ### Working Conventions
 - **Source of truth**: Creative Brief and Decision Log.
