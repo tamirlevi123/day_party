@@ -15,7 +15,7 @@ const BACKEND_CALLBACK_URL = process.env.GOOGLE_CALLBACK_URL || 'http://localhos
  * POST /auth/social/start
  * Initiates OAuth flow by returning authorization URL
  */
-export const startSocialAuth = async (req: Request, res: Response) => {
+export const startSocialAuth = async (req: Request, res: Response): Promise<Response | void> => {
   try {
     const { provider, redirectUri } = req.body;
 
@@ -56,11 +56,11 @@ export const startSocialAuth = async (req: Request, res: Response) => {
       `access_type=offline&` +
       `prompt=consent`;
 
-    res.status(200).json({
+    return res.status(200).json({
       authorizationUrl: authUrl,
     });
   } catch (error: any) {
-    res.status(500).json({
+    return res.status(500).json({
       error: 'internal_server_error',
       message: error.message || 'Failed to start OAuth flow',
     });
@@ -72,7 +72,7 @@ export const startSocialAuth = async (req: Request, res: Response) => {
  * Handles Google OAuth callback (redirected from Google)
  * This endpoint receives the code from Google, then redirects to the app's deep link
  */
-export const handleGoogleCallback = async (req: Request, res: Response) => {
+export const handleGoogleCallback = async (req: Request, res: Response): Promise<Response | void> => {
   try {
     const { code, state } = req.query;
 
@@ -100,7 +100,7 @@ export const handleGoogleCallback = async (req: Request, res: Response) => {
     
     // Check if this is likely an emulator request (browser can't reach localhost)
     // Provide a page with the code that user can copy or click
-    res.send(`
+    return res.send(`
       <!DOCTYPE html>
       <html>
         <head>
@@ -218,7 +218,7 @@ export const handleGoogleCallback = async (req: Request, res: Response) => {
     `);
   } catch (error: any) {
     console.error('Google OAuth callback error:', error);
-    res.status(500).send('Authentication failed. Please try again.');
+    return res.status(500).send('Authentication failed. Please try again.');
   }
 };
 
@@ -227,7 +227,7 @@ export const handleGoogleCallback = async (req: Request, res: Response) => {
  * Alternative endpoint: App can call this directly with code (for testing or alternative flow)
  * Handles OAuth callback and exchanges code for JWT tokens
  */
-export const handleSocialCallback = async (req: Request, res: Response) => {
+export const handleSocialCallback = async (req: Request, res: Response): Promise<Response | void> => {
   try {
     const { provider, code, redirectUri } = req.body;
 
@@ -310,7 +310,7 @@ export const handleSocialCallback = async (req: Request, res: Response) => {
     // Generate JWT tokens
     const { token, refreshToken } = generateTokensForUser(user.id, user.role);
 
-    res.status(200).json({
+    return res.status(200).json({
       token,
       refreshToken,
       user: {
@@ -323,7 +323,7 @@ export const handleSocialCallback = async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.error('OAuth callback error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       error: 'internal_server_error',
       message: error.message || 'Failed to complete OAuth flow',
     });
@@ -334,7 +334,7 @@ export const handleSocialCallback = async (req: Request, res: Response) => {
  * POST /auth/logout
  * Logs out user (invalidates session)
  */
-export const logout = async (req: Request, res: Response) => {
+export const logout = async (req: Request, res: Response): Promise<Response | void> => {
   try {
     // Extract token from Authorization header
     const authHeader = req.headers.authorization;
@@ -353,7 +353,7 @@ export const logout = async (req: Request, res: Response) => {
     // Logout user (invalidate refresh token if needed)
     await logoutUser(payload.userId);
 
-    res.status(204).send();
+    return res.status(204).send();
   } catch (error: any) {
     if (error.message === 'Invalid or expired token') {
       return res.status(401).json({
@@ -362,7 +362,7 @@ export const logout = async (req: Request, res: Response) => {
       });
     }
 
-    res.status(500).json({
+    return res.status(500).json({
       error: 'internal_server_error',
       message: error.message || 'Failed to logout',
     });

@@ -3,7 +3,7 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-export const getTopics = async (req: Request, res: Response) => {
+export const getTopics = async (_req: Request, res: Response): Promise<Response | void> => {
   try {
     const topics = await prisma.topic.findMany({
       where: {
@@ -39,19 +39,19 @@ export const getTopics = async (req: Request, res: Response) => {
       createdAt: topic.createdAt.toISOString(),
     }));
 
-    res.status(200).json({
+    return res.status(200).json({
       topics: formattedTopics,
     });
   } catch (error: any) {
     console.error('Error fetching topics:', error);
-    res.status(500).json({
+    return res.status(500).json({
       error: 'internal_error',
       message: 'Failed to fetch topics',
     });
   }
 };
 
-export const getTopic = async (req: Request, res: Response) => {
+export const getTopic = async (req: Request, res: Response): Promise<Response | void> => {
   try {
     const { topicId } = req.params;
 
@@ -81,7 +81,7 @@ export const getTopic = async (req: Request, res: Response) => {
       });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       topicId: topic.id,
       name: topic.name,
       description: topic.description,
@@ -91,14 +91,14 @@ export const getTopic = async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.error('Error fetching topic:', error);
-    res.status(500).json({
+    return res.status(500).json({
       error: 'internal_error',
       message: 'Failed to fetch topic',
     });
   }
 };
 
-export const getTopicThreads = async (req: Request, res: Response) => {
+export const getTopicThreads = async (req: Request, res: Response): Promise<Response | void> => {
   try {
     const { topicId } = req.params;
 
@@ -143,12 +143,12 @@ export const getTopicThreads = async (req: Request, res: Response) => {
       createdAt: thread.createdAt.toISOString(),
     }));
 
-    res.status(200).json({
+    return res.status(200).json({
       threads: formattedThreads,
     });
   } catch (error: any) {
     console.error('Error fetching topic threads:', error);
-    res.status(500).json({
+    return res.status(500).json({
       error: 'internal_error',
       message: 'Failed to fetch topic threads',
     });

@@ -1,4 +1,4 @@
-import { PrismaClient, Provider, Role } from '@prisma/client';
+import { Provider, Role } from '@prisma/client';
 import { generateAccessToken, generateRefreshToken, JWTPayload } from '../utils/jwt.util';
 import { prisma } from '../server';
 
@@ -122,7 +122,7 @@ export function generateTokensForUser(userId: string, role: Role): {
  * Logout user (invalidate refresh token if needed)
  * For now, we just return success - token invalidation can be added later
  */
-export async function logoutUser(userId: string): Promise<void> {
+export async function logoutUser(_userId: string): Promise<void> {
   // Future: Could add refresh token blacklist here
   // For now, JWT tokens are stateless and will expire naturally
   return Promise.resolve();

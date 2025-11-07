@@ -4,7 +4,7 @@ import { PrismaClient, VoteType } from '@prisma/client';
 const prisma = new PrismaClient();
 
 // POST /nodes/:nodeId/vote
-export const createOrUpdateVote = async (req: Request, res: Response) => {
+export const createOrUpdateVote = async (req: Request, res: Response): Promise<Response | void> => {
   try {
     const { nodeId } = req.params;
     const { type, isPublic = false } = req.body;
@@ -70,7 +70,7 @@ export const createOrUpdateVote = async (req: Request, res: Response) => {
       },
     });
 
-    res.status(200).json({
+    return res.status(200).json({
       nodeId,
       tallies: {
         like: likeCount,
@@ -83,12 +83,12 @@ export const createOrUpdateVote = async (req: Request, res: Response) => {
       },
     });
   } catch (error: any) {
-    res.status(500).json({ error: 'internal_server_error', message: error.message });
+    return res.status(500).json({ error: 'internal_server_error', message: error.message });
   }
 };
 
 // PATCH /nodes/:nodeId/vote/visibility
-export const updateVoteVisibility = async (req: Request, res: Response) => {
+export const updateVoteVisibility = async (req: Request, res: Response): Promise<Response | void> => {
   try {
     const { nodeId } = req.params;
     const { isPublic } = req.body;
@@ -121,7 +121,7 @@ export const updateVoteVisibility = async (req: Request, res: Response) => {
       data: { isPublic },
     });
 
-    res.status(200).json({
+    return res.status(200).json({
       nodeId,
       myVote: {
         type: updatedVote.type,
@@ -129,7 +129,7 @@ export const updateVoteVisibility = async (req: Request, res: Response) => {
       },
     });
   } catch (error: any) {
-    res.status(500).json({ error: 'internal_server_error', message: error.message });
+    return res.status(500).json({ error: 'internal_server_error', message: error.message });
   }
 };
 

@@ -3,7 +3,7 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-export const getThread = async (req: Request, res: Response) => {
+export const getThread = async (req: Request, res: Response): Promise<Response | void> => {
   try {
     const { threadId } = req.params;
 
@@ -64,7 +64,7 @@ export const getThread = async (req: Request, res: Response) => {
     }));
 
     // Return thread with nodes
-    res.status(200).json({
+    return res.status(200).json({
       thread: {
         threadId: thread.id,
         topicId: thread.topicId,
@@ -76,11 +76,11 @@ export const getThread = async (req: Request, res: Response) => {
       nodes: formattedNodes,
     });
   } catch (error: any) {
-    res.status(500).json({ error: 'internal_server_error', message: error.message });
+    return res.status(500).json({ error: 'internal_server_error', message: error.message });
   }
 };
 
-export const getThreadNodes = async (req: Request, res: Response) => {
+export const getThreadNodes = async (req: Request, res: Response): Promise<Response | void> => {
   try {
     const { threadId } = req.params;
 
@@ -133,9 +133,9 @@ export const getThreadNodes = async (req: Request, res: Response) => {
       editedAt: node.editedAt?.toISOString() || null,
     }));
 
-    res.status(200).json(formattedNodes);
+    return res.status(200).json(formattedNodes);
   } catch (error: any) {
-    res.status(500).json({ error: 'internal_server_error', message: error.message });
+    return res.status(500).json({ error: 'internal_server_error', message: error.message });
   }
 };
 

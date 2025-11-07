@@ -3,7 +3,7 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-export const getNode = async (req: Request, res: Response) => {
+export const getNode = async (req: Request, res: Response): Promise<Response | void> => {
   try {
     const { nodeId } = req.params;
 
@@ -24,7 +24,7 @@ export const getNode = async (req: Request, res: Response) => {
     }
 
     // Return node with vote tallies
-    res.status(200).json({
+    return res.status(200).json({
       nodeId: node.id,
       threadId: node.threadId,
       parentNodeId: node.parentNodeId,
@@ -45,11 +45,11 @@ export const getNode = async (req: Request, res: Response) => {
       editedAt: node.editedAt?.toISOString() || null,
     });
   } catch (error: any) {
-    res.status(500).json({ error: 'internal_server_error', message: error.message });
+    return res.status(500).json({ error: 'internal_server_error', message: error.message });
   }
 };
 
-export const createNode = async (req: Request, res: Response) => {
+export const createNode = async (req: Request, res: Response): Promise<Response | void> => {
   try {
     const { threadId, parentNodeId, parentRelation, title, textContent, videoUrl, isAnonymous } = req.body;
 
@@ -101,7 +101,7 @@ export const createNode = async (req: Request, res: Response) => {
       },
     });
 
-    res.status(201).json({
+    return res.status(201).json({
       nodeId: node.id,
       threadId: node.threadId,
       parentNodeId: node.parentNodeId,
@@ -121,11 +121,11 @@ export const createNode = async (req: Request, res: Response) => {
         message: 'Thread or parent node not found',
       });
     }
-    res.status(500).json({ error: 'internal_server_error', message: error.message });
+    return res.status(500).json({ error: 'internal_server_error', message: error.message });
   }
 };
 
-export const updateNode = async (req: Request, res: Response) => {
+export const updateNode = async (req: Request, res: Response): Promise<Response | void> => {
   try {
     const { nodeId } = req.params;
     const { title, textContent, videoUrl, parentRelation } = req.body;
@@ -167,7 +167,7 @@ export const updateNode = async (req: Request, res: Response) => {
       },
     });
 
-    res.status(200).json({
+    return res.status(200).json({
       nodeId: updatedNode.id,
       title: updatedNode.title,
       parentRelation: updatedNode.parentRelation,
@@ -177,7 +177,7 @@ export const updateNode = async (req: Request, res: Response) => {
     if (error.code === 'P2025') {
       return res.status(404).json({ error: 'not_found', message: 'Node not found' });
     }
-    res.status(500).json({ error: 'internal_server_error', message: error.message });
+    return res.status(500).json({ error: 'internal_server_error', message: error.message });
   }
 };
 

@@ -1,7 +1,5 @@
 import { google } from 'googleapis';
 import { Readable } from 'stream';
-import fs from 'fs';
-import path from 'path';
 import dotenv from 'dotenv';
 
 // Load environment variables (in case this module is imported before server.ts loads dotenv)
@@ -18,10 +16,20 @@ export interface UploadVideoResult {
 }
 
 class DriveService {
-  private drive: any;
+  private drive: any = null;
   private folderId: string | null = null;
+  private initialized: boolean = false;
 
   constructor() {
+    // Lazy initialization - only initialize when actually needed
+    // This allows the server to start even if Google Drive credentials are not configured
+  }
+
+  private ensureInitialized() {
+    if (this.initialized && this.drive) {
+      return;
+    }
+
     this.initialize();
   }
 
@@ -47,29 +55,41 @@ class DriveService {
           scopes: ['https://www.googleapis.com/auth/drive.file'],
         });
         this.drive = google.drive({ version: 'v3', auth });
+        this.initialized = true;
+        console.log('✅ Google Drive initialized with Service Account');
       } catch (error) {
-        console.error('Failed to parse Google Drive credentials:', error);
+        console.error('❌ Failed to parse Google Drive credentials:', error);
         throw new Error('Invalid Google Drive credentials format');
       }
     } else if (clientId && clientSecret && refreshToken) {
       // OAuth2 approach (for personal Drive)
-      const oauth2Client = new google.auth.OAuth2(
-        clientId,
-        clientSecret,
-        'http://localhost' // Redirect URI (not used for refresh token flow)
-      );
+      try {
+        const oauth2Client = new google.auth.OAuth2(
+          clientId,
+          clientSecret,
+          'http://localhost' // Redirect URI (not used for refresh token flow)
+        );
 
-      oauth2Client.setCredentials({
-        refresh_token: refreshToken,
-      });
+        oauth2Client.setCredentials({
+          refresh_token: refreshToken,
+        });
 
-      this.drive = google.drive({ version: 'v3', auth: oauth2Client });
+        this.drive = google.drive({ version: 'v3', auth: oauth2Client });
+        this.initialized = true;
+        console.log('✅ Google Drive initialized with OAuth2');
+      } catch (error) {
+        console.error('❌ Failed to initialize Google Drive OAuth2:', error);
+        throw new Error('Failed to initialize Google Drive OAuth2 credentials');
+      }
     } else {
-      throw new Error(
+      const errorMsg = 
         'Google Drive credentials not configured. ' +
+        'Video uploads will not work. ' +
+        'See GOOGLE_DRIVE_SETUP.md for setup instructions. ' +
         'Provide either GOOGLE_DRIVE_CREDENTIALS (service account) or ' +
-        'GOOGLE_DRIVE_CLIENT_ID, GOOGLE_DRIVE_CLIENT_SECRET, and GOOGLE_DRIVE_REFRESH_TOKEN (OAuth2)'
-      );
+        'GOOGLE_DRIVE_CLIENT_ID, GOOGLE_DRIVE_CLIENT_SECRET, and GOOGLE_DRIVE_REFRESH_TOKEN (OAuth2)';
+      console.warn('⚠️  ' + errorMsg);
+      throw new Error(errorMsg);
     }
   }
 
@@ -85,6 +105,8 @@ class DriveService {
     fileName: string,
     mimeType: string = 'video/mp4'
   ): Promise<UploadVideoResult> {
+    // Lazy initialization - only initialize when upload is attempted
+    this.ensureInitialized();
     try {
       const fileMetadata: any = {
         name: `dayparty-${Date.now()}-${fileName}`,
@@ -140,6 +162,8 @@ class DriveService {
    * Delete a file from Google Drive
    */
   async deleteFile(fileId: string): Promise<void> {
+    // Lazy initialization - only initialize when delete is attempted
+    this.ensureInitialized();
     try {
       await this.drive.files.delete({
         fileId,
@@ -154,6 +178,8 @@ class DriveService {
    * Get file metadata
    */
   async getFileInfo(fileId: string) {
+    // Lazy initialization - only initialize when getting file info
+    this.ensureInitialized();
     try {
       const response = await this.drive.files.get({
         fileId,

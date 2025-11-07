@@ -38,7 +38,7 @@ export const upload = multer({
  * Content-Type: multipart/form-data
  * Body: { video: File }
  */
-export const uploadVideo = async (req: Request, res: Response) => {
+export const uploadVideo = async (req: Request, res: Response): Promise<Response | void> => {
   try {
     if (!req.file) {
       return res.status(400).json({
@@ -66,7 +66,7 @@ export const uploadVideo = async (req: Request, res: Response) => {
 
     // Return the public URL for video playback
     // Use webContentLink for direct streaming access
-    res.status(200).json({
+    return res.status(200).json({
       videoUrl: result.webContentLink,
       fileId: result.fileId,
       webViewLink: result.webViewLink,
@@ -85,7 +85,7 @@ export const uploadVideo = async (req: Request, res: Response) => {
       });
     }
 
-    res.status(500).json({
+    return res.status(500).json({
       error: 'upload_failed',
       message: error.message || 'Failed to upload video',
     });
@@ -96,7 +96,7 @@ export const uploadVideo = async (req: Request, res: Response) => {
  * Delete video endpoint (optional, for cleanup)
  * DELETE /api/videos/:fileId
  */
-export const deleteVideo = async (req: Request, res: Response) => {
+export const deleteVideo = async (req: Request, res: Response): Promise<Response | void> => {
   try {
     const { fileId } = req.params;
 
@@ -109,13 +109,13 @@ export const deleteVideo = async (req: Request, res: Response) => {
 
     await driveService.deleteFile(fileId);
 
-    res.status(200).json({
+    return res.status(200).json({
       message: 'Video deleted successfully',
       fileId,
     });
   } catch (error: any) {
     console.error('Video delete error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       error: 'delete_failed',
       message: error.message || 'Failed to delete video',
     });
