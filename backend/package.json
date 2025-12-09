@@ -12,7 +12,9 @@
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
     "db:seed": "tsx scripts/seed.ts",
-    "db:update-enum": "tsx scripts/update-enum.ts"
+    "db:update-enum": "tsx scripts/update-enum.ts",
+    "db:update-enum-delta": "tsx scripts/update-enum-delta.ts",
+    "admin:set": "tsx scripts/set-admin.ts"
   },
   "keywords": [
     "democracy",

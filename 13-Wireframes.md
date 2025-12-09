@@ -260,7 +260,8 @@ Detailed wireframe descriptions for each screen in the Android MVP. These serve 
 │  │ [Node Title]      │  │
 │  │                   │  │
 │  │ [Node Content]    │  │
-│  │ Text or video...  │  │
+│  │ Text and/or       │  │
+│  │ embedded media    │  │
 │  │                   │  │
 │  ├───────────────────┤  │
 │  │ [👍 42]    [8 👎] │  │ ← Vote tallies (Like left, Dislike right)
@@ -290,8 +291,10 @@ Detailed wireframe descriptions for each screen in the Android MVP. These serve 
 └─────────────────────────┘
 ```
 
-**Elements**:
 - **Root Node**: Full card, prominent (no parent relation badge)
+- **Embedded Media**: 16:9 player area supporting:
+  - Uploaded video (Drive streaming)
+  - External embeds (YouTube/Vimeo) rendered via WebView/YouTube Player with provider badge + "Open in YouTube" fallback
 - **Reply Tree**: Collapsible, indented by level
 - **Reply Node Headers**: Show parent relation badge (PRO/AGAINST/NEUTRAL) + author info
 - **Vote Section**: Tally display + action buttons
@@ -335,7 +338,8 @@ Detailed wireframe descriptions for each screen in the Android MVP. These serve 
 │  [Node Content Text]    │
 │  ...full content...     │
 │                         │
-│  [Video Player]         │ ← If video attached
+│  [Video Player]         │ ← If video attached or linked (inline 16:9)
+│  [Source Badge]         │ ← e.g., "YouTube" chip when external
 │  [Toggle: Text/Video]   │ ← If both
 │                         │
 │  ┌───────────────────┐  │
@@ -365,7 +369,9 @@ Detailed wireframe descriptions for each screen in the Android MVP. These serve 
 ```
 
 **Elements**:
-- **Video Player**: Media3 player, full width, 16:9 aspect ratio
+- **Video Player**: Media3 or embedded web player, full width, 16:9 aspect ratio
+- **Source Badge**: Small chip above player when external (e.g., YouTube)
+- **Open Externally Link**: Text button below player to launch provider app/site
 - **Vote Section**: Prominent, card-style
   - Like (👍) buttons and tallies on LEFT
   - Dislike (👎) buttons and tallies on RIGHT
@@ -409,8 +415,14 @@ Detailed wireframe descriptions for each screen in the Android MVP. These serve 
 │  │                   │  │
 │  └───────────────────┘  │
 │                         │
-│  [📹 Add Video]         │ ← Button (if not added)
-│  [Video: video.mp4]     │ ← If added (show name, remove)
+│  Media:                 │
+│  ┌───────────────────┐  │
+│  │  [➕ Add Media]    │  │ ← Opens bottom sheet (upload vs link)
+│  └───────────────────┘  │
+│                         │
+│  [Video: YouTube -    ] │ ← If linked (thumbnail + title + remove CTA)
+│  [Video: upload.mp4]   │ ← If uploaded (file name + remove CTA)
+│  [Preview player      ] │ ← Inline 16:9 preview when media selected
 │                         │
 │  Relation to parent:   │ ← Only shown if replying (not root)
 │  (●) PRO  ( ) AGAINST  │ ← Radio buttons or segmented control
@@ -431,17 +443,24 @@ Detailed wireframe descriptions for each screen in the Android MVP. These serve 
 **Elements**:
 - **Title Input**: Standard Input, single line
 - **Content Input**: Text Area, min height 200dp
-- **Video Upload**: Button opens file picker/video recorder
+- **Media Card**: Outlined container with `Add Media` button
+  - Tapping opens media source sheet with options:
+    - Upload from device (reuse existing picker)
+    - Paste external link (shows text field, paste button)
+  - Once media is selected, show compact card with thumbnail, title, source icon, remove action, and inline preview (16:9)
 - **Parent Relation Selector**: Radio buttons/segmented control (PRO/AGAINST/NEUTRAL) - only shown when replying, hidden for root nodes
 - **Anonymous Toggle**: Switch component
-- **Post Button**: Fixed at bottom (always visible), disabled until title/content filled
+- **Post Button**: Fixed at bottom (always visible), disabled until title/content filled and any external link validated
 
 **Behavior**:
 - Title required, min 3 chars
 - Content required, min 10 chars
-- Video optional (max size: 50MB, format: MP4)
+- Media optional. If user chooses:
+  - **Upload**: prompt file picker (max 50MB, MP4). Show upload progress + success state.
+  - **Link**: show paste field, auto-fetch preview via `/videos/preview`, display metadata + inline mini player before save.
+- Validate external link before enabling Post (show errors in media card)
 - **Parent relation**: Required if replying (PRO/AGAINST/NEUTRAL), hidden for root nodes
-- Preview: Opens modal/sheet with formatted preview
+- Preview: Opens modal/sheet with formatted preview (includes embedded video/link preview)
 - Post: Shows progress, navigates to Thread Detail on success
 - Validation: Show errors inline
 
@@ -685,6 +704,39 @@ Detailed wireframe descriptions for each screen in the Android MVP. These serve 
 ---
 
 #### Screen 15: Report Content Dialog
+#### Screen 16: Add Media Sheet
+
+**Purpose**: Let users choose how to attach video content to a node.
+
+**Layout** (Bottom Sheet):
+```
+┌─────────────────────────┐
+│  ═══                    │ ← Handle
+├─────────────────────────┤
+│  Add Media              │ ← Title
+│  Choose how to attach:  │ ← Subtitle
+├─────────────────────────┤
+│  [📁 Upload from device]│ ← List item (opens picker)
+│  [🔗 Paste link]        │ ← List item (expands to input field)
+│                         │
+│  Link input state:      │
+│  ┌───────────────────┐  │
+│  │ https://...       │  │ ← Text field + Paste button
+│  └───────────────────┘  │
+│  [Fetch preview] button  │
+│  [Preview card]          │ ← Thumbnail, title, provider, remove
+│                         │
+│  [Cancel]    [Attach]   │ ← Buttons (Attach disabled until preview ready)
+└─────────────────────────┘
+```
+
+**Behavior**:
+- Upload option immediately opens Android file picker and dismisses sheet on success.
+- Link option validates URL (allowlist), calls `/videos/preview`, shows loading spinner, then displays preview card with inline play.
+- If preview fails, show error message inline and keep Attach disabled.
+- Attach button inserts media card into Create/Edit screen; Cancel closes sheet with no changes.
+- Removing media from Create/Edit screen clears selection so sheet can be reopened.
+
 
 **Purpose**: Report inappropriate content
 

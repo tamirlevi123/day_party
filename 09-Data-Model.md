@@ -96,14 +96,19 @@ Indexes:
 - parent_relation (enum: 'pro' | 'against' | 'neutral', nullable)  // relation to parent (NULL for root nodes)
 - title (text)
 - text_content (text, nullable)
-- text_format (text enum: 'markdown' | 'plain', default 'plain')
-- video_url (text, nullable)  // storage location/URL
+- text_format (text enum: 'markdown' | 'plain' | 'html' | 'delta', default 'plain')
+- video_source (enum: 'upload' | 'external', default 'upload')  // identifies whether video is stored in Drive or linked
+- video_url (text, nullable)  // storage location/URL (Drive URL or provider link)
+- video_provider (enum: 'youtube' | 'vimeo' | 'other', nullable)  // only when video_source='external'
+- video_provider_id (text, nullable)  // e.g., YouTube video ID
+- video_embed_html (text, nullable)  // cached embed snippet (sanitized)
+- video_metadata_json (json, nullable)  // cached provider metadata (title, duration, channel)
 - video_duration_sec (int, nullable)
-- video_thumbnail_url (text, nullable)
+- video_thumbnail_url (text, nullable)  // CDN/Drive thumbnail or provider thumbnail
 - text_language (text, nullable)  // e.g., 'he', 'en'
 - text_confidence (numeric, nullable)  // if generated/transcribed
 - text_status (text enum: 'provided' | 'generated' | 'missing', default 'missing')
-- video_status (text enum: 'provided' | 'generated' | 'missing', default 'missing')
+- video_status (text enum: 'provided' | 'generated' | 'linked' | 'missing', default 'missing')
 - moderation_state (text enum: 'visible' | 'limited' | 'hidden' | 'removed', default 'visible')
 - is_anonymous (boolean, default false)
 - author_id (fk -> users.id, nullable)  // nullable when anonymous
@@ -125,7 +130,9 @@ Voting denormalized tallies (optional, update async):
 
 Constraints:
 - At creation, at least one of (text_content, video_url) should be non-null
-  (enforced at application/service layer for simplicity in MVP)
+  (enforced at application/service layer for simplicity in MVP).
+- When `video_source='external'`, `video_provider` and `video_url` must be present; `video_provider_id` required for known providers (YouTube/Vimeo).
+- When `video_source='upload'`, `video_provider*` fields must be null.
 
 Indexes:
 - (thread_id)
@@ -138,14 +145,19 @@ Indexes:
 - version_number (int)  // 1-based incremental
 - title (text)
 - text_content (text, nullable)
-- text_format (text enum: 'markdown' | 'plain')
+- text_format (text enum: 'markdown' | 'plain' | 'html' | 'delta')
+- video_source (enum: 'upload' | 'external', nullable)
 - video_url (text, nullable)
+- video_provider (enum: 'youtube' | 'vimeo' | 'other', nullable)
+- video_provider_id (text, nullable)
+- video_embed_html (text, nullable)
+- video_metadata_json (json, nullable)
 - video_duration_sec (int, nullable)
 - video_thumbnail_url (text, nullable)
 - text_language (text, nullable)
 - text_confidence (numeric, nullable)
 - text_status (text enum: 'provided' | 'generated' | 'missing')
-- video_status (text enum: 'provided' | 'generated' | 'missing')
+- video_status (text enum: 'provided' | 'generated' | 'linked' | 'missing')
 - moderation_state (text enum: 'visible' | 'limited' | 'hidden' | 'removed')
 - edited_by (fk -> users.id, nullable)  // uploader or moderator
 - edited_at (datetime, default current_timestamp)

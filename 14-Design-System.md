@@ -228,6 +228,17 @@ Foundational design tokens, components, and guidelines for the Android MVP. This
 - Same as standard card
 - Indentation for hierarchy: 16dp per level (max 4 levels visible)
 - Border left: 4dp, colored by vote tally (if voted)
+**Media Attachment Card** (Create/Edit)
+- Background: Grey 50 (`#FAFAFA`)
+- Border: 1dp dashed, Primary Blue at 40% opacity when empty; solid Grey 300 when populated
+- Padding: 16dp
+- Layout:
+  - Empty state: Centered icon (`add_circle`), Title Small text "Add media", helper text Body Small
+  - Populated state: Row with provider icon, title, source chip, 16:9 thumbnail preview, remove icon button at end
+- States:
+  - **Valid external link**: Show provider chip (Primary Blue background, white text) + "Open preview" text button
+  - **Error**: Border Red 700, helper text red, error icon
+  - **Loading**: Replace preview with progress indicator, disable remove button
 
 **Reply Node Header** (for reply nodes only, not root)
 - Must display parent relation badge (PRO/AGAINST/NEUTRAL)
@@ -235,6 +246,25 @@ Foundational design tokens, components, and guidelines for the Android MVP. This
 - Badge is first element in header row (before author name)
 
 #### Voting Components
+#### Media & Provider Badges
+
+**Provider Chip**
+- Background: Determined by provider
+  - YouTube: `#FF0000`
+  - Vimeo: `#1AB7EA`
+  - Other: Primary Blue (`#1976D2`)
+- Text: White, Label Medium (12sp)
+- Icon: 16dp provider glyph to the start (mirrors in RTL)
+- Padding: 8dp horizontal, 4dp vertical
+- Border radius: 12dp (pill)
+- Usage: Display above embedded player and inside media card to signal external source.
+
+**Open Externally Link**
+- Text Button style, trailing `open_in_new` icon (flips in RTL)
+- Typography: Label Large, Primary Blue
+- Touch target: 48dp height
+- Placement: Right-aligned (start in RTL) directly beneath media player
+
 
 **Vote Button** (Like/Dislike - MVP: Abstain hidden)
 - Type: Icon Button (icon-only, no text labels)

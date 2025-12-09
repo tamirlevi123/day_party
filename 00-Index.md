@@ -26,12 +26,22 @@ Use this index to navigate key deliverables. Keep entries concise and link out.
 - 21 Backend Deployment Status — `21-Backend-Deployment-Status.md`
 - 22 Android Project Plan — `22-Android-Project-Plan.md`
 - 23 Android Gradle Tasks — `23-Android-Gradle-Tasks.md`
+- 24 Android Project Analysis — `24-Android-Project-Analysis.md`
+- 26 Windows Development Environment — `26-Windows-Development-Environment.md` ⚠️ **READ FIRST**
+- **Emulator Setup** — `EMULATOR_SETUP.md` ⚠️ **REQUIRED FOR EMULATOR TESTING**
 
 ### Working Conventions
 - **Source of truth**: Creative Brief and Decision Log.
 - **Decision hygiene**: Every decision that affects scope, UX, brand, or tech gets an entry.
 - **Cadence**: Update Brief and Roadmap when scope changes; log decisions same day; add review notes per session.
 - **Versioning**: Append date (YYYY-MM-DD) to section headings for major updates.
+
+### ⚠️ Critical Development Environment Note
+**FOR AI AGENTS**: This project runs on **Windows PowerShell**. 
+- **NEVER use `&&`** to chain commands (Unix/Linux syntax)
+- **ALWAYS use `;` (semicolon)** to chain commands in PowerShell
+- Example: `command1 ; command2` ✅ | `command1 && command2` ❌
+- See `03-Decision-Log.md` entry dated 2025-01-27 for full details
 
 ### Quick Start
 1) Fill `01-Creative-Brief.md` minimally.

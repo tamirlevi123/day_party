@@ -1,7 +1,11 @@
 import express from 'express';
-import { uploadVideo, deleteVideo, upload } from '../controllers/video.controller';
+import { uploadVideo, deleteVideo, upload, previewExternalVideo } from '../controllers/video.controller';
 
 const router = express.Router();
+
+// POST /api/videos/preview
+// Validate external video links and return metadata
+router.post('/preview', previewExternalVideo);
 
 // POST /api/videos/upload
 // Upload a video file to Google Drive

@@ -1,5 +1,20 @@
 # Port Forwarding Script for Android Emulator OAuth Testing
-# This forwards localhost:3000 from emulator to host machine
+# 
+# This script sets up ADB reverse port forwarding (IP tunneling) to forward
+# localhost:3000 from the Android emulator to localhost:3000 on your host machine.
+#
+# Why this is needed:
+# - The Flutter app uses 10.0.2.2:3000 for API calls (works without port forwarding)
+# - Google OAuth redirects to localhost:3000 (needs port forwarding)
+# - localhost in emulator refers to emulator itself, not your host machine
+#
+# Required: adb reverse tcp:3000 tcp:3000
+# This creates a TCP tunnel: emulator localhost:3000 -> host localhost:3000
+#
+# IMPORTANT: Port forwarding resets when you restart the emulator!
+# You must run this script again after each emulator restart.
+#
+# See EMULATOR_SETUP.md in the project root for complete documentation.
 
 $adbPath = "$env:LOCALAPPDATA\Android\sdk\platform-tools\adb.exe"
 

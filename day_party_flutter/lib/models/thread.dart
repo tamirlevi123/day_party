@@ -124,3 +124,32 @@ class CreateNodeResponse {
   }
 }
 
+class CreateThreadResponse {
+  final String threadId;
+  final String topicId;
+  final String title;
+  final String? description;
+  final String status;
+  final String createdAt;
+
+  CreateThreadResponse({
+    required this.threadId,
+    required this.topicId,
+    required this.title,
+    this.description,
+    required this.status,
+    required this.createdAt,
+  });
+
+  factory CreateThreadResponse.fromJson(Map<String, dynamic> json) {
+    return CreateThreadResponse(
+      threadId: json['threadId'],
+      topicId: json['topicId'],
+      title: json['title'],
+      description: json['description'],
+      status: json['status'],
+      createdAt: json['createdAt'],
+    );
+  }
+}
+

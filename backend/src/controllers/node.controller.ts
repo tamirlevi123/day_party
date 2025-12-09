@@ -1,7 +1,129 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient, ContentStatus, VideoSource, VideoProvider } from '@prisma/client';
+import { getVideoPreview } from '../services/video-link.service';
+import { transformNodeToResponse } from '../utils/node-response.util';
 
 const prisma = new PrismaClient();
+
+type VideoPayload = {
+  source: 'upload' | 'external';
+  url?: string;
+  externalUrl?: string;
+  thumbnailUrl?: string | null;
+  durationSec?: number | null;
+};
+
+type VideoPrismaData = {
+  videoUrl: string | null;
+  videoThumbnailUrl: string | null;
+  videoDurationSec: number | null;
+  videoSource: VideoSource;
+  videoProvider: VideoProvider | null;
+  videoProviderId: string | null;
+  videoEmbedHtml: string | null;
+  videoMetadataJson: Prisma.NullableJsonNullValueInput | Prisma.InputJsonValue;
+  videoStatus: ContentStatus;
+};
+
+const EMPTY_VIDEO_DATA: VideoPrismaData = {
+  videoUrl: null,
+  videoThumbnailUrl: null,
+  videoDurationSec: null,
+  videoSource: VideoSource.upload,
+  videoProvider: null,
+  videoProviderId: null,
+  videoEmbedHtml: null,
+  videoMetadataJson: Prisma.DbNull,
+  videoStatus: ContentStatus.missing,
+};
+
+const normaliseVideoPayload = (raw: unknown): VideoPayload | null | undefined => {
+  if (raw === undefined) return undefined;
+  if (raw === null) return null;
+
+  if (typeof raw !== 'object') {
+    throw new Error('video must be an object');
+  }
+
+  const payload = raw as Record<string, unknown>;
+  const source = payload.source;
+
+  if (source !== 'upload' && source !== 'external') {
+    throw new Error('video.source must be either "upload" or "external"');
+  }
+
+  const urlValue = payload.url ?? payload.videoUrl;
+  const externalUrlValue = payload.externalUrl;
+  const thumbnailUrl = typeof payload.thumbnailUrl === 'string' ? payload.thumbnailUrl : null;
+  const durationSec =
+    typeof payload.durationSec === 'number'
+      ? payload.durationSec
+      : typeof payload.durationSec === 'string' && payload.durationSec.trim() !== ''
+      ? Number(payload.durationSec)
+      : null;
+
+  if (durationSec !== null && !Number.isFinite(durationSec)) {
+    throw new Error('video.durationSec must be a finite number');
+  }
+
+  return {
+    source,
+    url: typeof urlValue === 'string' ? urlValue : undefined,
+    externalUrl: typeof externalUrlValue === 'string' ? externalUrlValue : undefined,
+    thumbnailUrl,
+    durationSec: durationSec ?? null,
+  };
+};
+
+const resolveVideoData = async (payload: VideoPayload | null | undefined): Promise<VideoPrismaData | null> => {
+  if (payload === undefined) {
+    return null; // no update requested
+  }
+
+  if (payload === null) {
+    return { ...EMPTY_VIDEO_DATA };
+  }
+
+  if (payload.source === 'upload') {
+    const url = payload.url;
+    if (!url) {
+      throw new Error('video.url is required when source is "upload"');
+    }
+
+    return {
+      videoUrl: url,
+      videoThumbnailUrl: payload.thumbnailUrl ?? null,
+      videoDurationSec: payload.durationSec ?? null,
+      videoSource: VideoSource.upload,
+      videoProvider: null,
+      videoProviderId: null,
+      videoEmbedHtml: null,
+      videoMetadataJson: Prisma.DbNull,
+      videoStatus: ContentStatus.provided,
+    };
+  }
+
+  const candidateUrl = payload.externalUrl ?? payload.url;
+  if (!candidateUrl) {
+    throw new Error('video.externalUrl (or url) is required when source is "external"');
+  }
+
+  const preview = await getVideoPreview(candidateUrl);
+
+  return {
+    videoUrl: preview.normalizedUrl,
+    videoThumbnailUrl: preview.thumbnailUrl ?? payload.thumbnailUrl ?? null,
+    videoDurationSec: preview.durationSec ?? payload.durationSec ?? null,
+    videoSource: VideoSource.external,
+    videoProvider: preview.provider as VideoProvider,
+    videoProviderId: preview.providerId,
+    videoEmbedHtml: preview.embedHtml ?? null,
+    videoMetadataJson: preview.metadata
+      ? (preview.metadata as Prisma.JsonObject)
+      : Prisma.DbNull,
+    videoStatus: ContentStatus.linked,
+  };
+};
 
 export const getNode = async (req: Request, res: Response): Promise<Response | void> => {
   try {
@@ -23,27 +145,7 @@ export const getNode = async (req: Request, res: Response): Promise<Response | v
       return res.status(404).json({ error: 'not_found', message: 'Node not found' });
     }
 
-    // Return node with vote tallies
-    return res.status(200).json({
-      nodeId: node.id,
-      threadId: node.threadId,
-      parentNodeId: node.parentNodeId,
-      parentRelation: node.parentRelation,
-      title: node.title,
-      textContent: node.textContent,
-      videoUrl: node.videoUrl,
-      author: node.author ? {
-        id: node.author.id,
-        displayName: node.author.displayName,
-      } : null,
-      voteTallies: {
-        like: node.likeCount,
-        dislike: node.dislikeCount,
-        abstain: node.abstainCount,
-      },
-      createdAt: node.createdAt.toISOString(),
-      editedAt: node.editedAt?.toISOString() || null,
-    });
+    return res.status(200).json(transformNodeToResponse(node));
   } catch (error: any) {
     return res.status(500).json({ error: 'internal_server_error', message: error.message });
   }
@@ -51,7 +153,8 @@ export const getNode = async (req: Request, res: Response): Promise<Response | v
 
 export const createNode = async (req: Request, res: Response): Promise<Response | void> => {
   try {
-    const { threadId, parentNodeId, parentRelation, title, textContent, videoUrl, isAnonymous } = req.body;
+    const { threadId, parentNodeId, parentRelation, title, textContent, textFormat, videoUrl, isAnonymous } = req.body;
+    const videoPayloadRaw = req.body.video;
 
     // Validation: parentRelation required if parentNodeId provided
     if (parentNodeId && !parentRelation) {
@@ -77,8 +180,37 @@ export const createNode = async (req: Request, res: Response): Promise<Response 
       });
     }
 
-    // TODO: Get user ID from JWT token (for now, allow anonymous)
-    const authorId = isAnonymous ? null : undefined; // Will need auth middleware later
+    const normalizedVideoPayload = normaliseVideoPayload(
+      videoPayloadRaw ?? (typeof videoUrl === 'string' ? { source: 'upload', url: videoUrl } : undefined),
+    );
+    let videoData: VideoPrismaData | null = null;
+
+    try {
+      videoData = await resolveVideoData(normalizedVideoPayload);
+    } catch (videoError: any) {
+      return res.status(422).json({
+        error: 'unprocessable',
+        message: videoError?.message || 'Invalid video payload',
+      });
+    }
+
+    // Determine textFormat: use provided format, or auto-detect Delta JSON
+    let detectedTextFormat: 'plain' | 'markdown' | 'html' | 'delta' = 'plain';
+    if (textFormat) {
+      if (['plain', 'markdown', 'html', 'delta'].includes(textFormat)) {
+        detectedTextFormat = textFormat as 'plain' | 'markdown' | 'html' | 'delta';
+      }
+    } else if (textContent) {
+      // Auto-detect Delta JSON format
+      try {
+        const parsed = JSON.parse(textContent);
+        if (parsed && typeof parsed === 'object' && Array.isArray(parsed.ops)) {
+          detectedTextFormat = 'delta';
+        }
+      } catch {
+        // Not JSON, keep default 'plain'
+      }
+    }
 
     const node = await prisma.node.create({
       data: {
@@ -87,9 +219,9 @@ export const createNode = async (req: Request, res: Response): Promise<Response 
         parentRelation: parentRelation || null,
         title,
         textContent: textContent || null,
-        videoUrl: videoUrl || null,
-        authorId,
+        textFormat: detectedTextFormat,
         isAnonymous: isAnonymous || false,
+        ...(videoData ?? EMPTY_VIDEO_DATA),
       },
       include: {
         author: {
@@ -101,18 +233,7 @@ export const createNode = async (req: Request, res: Response): Promise<Response 
       },
     });
 
-    return res.status(201).json({
-      nodeId: node.id,
-      threadId: node.threadId,
-      parentNodeId: node.parentNodeId,
-      parentRelation: node.parentRelation,
-      title: node.title,
-      author: node.author ? {
-        id: node.author.id,
-        displayName: node.author.displayName,
-      } : null,
-      createdAt: node.createdAt,
-    });
+    return res.status(201).json(transformNodeToResponse(node));
   } catch (error: any) {
     if (error.code === 'P2003') {
       // Foreign key constraint failure
@@ -128,7 +249,8 @@ export const createNode = async (req: Request, res: Response): Promise<Response 
 export const updateNode = async (req: Request, res: Response): Promise<Response | void> => {
   try {
     const { nodeId } = req.params;
-    const { title, textContent, videoUrl, parentRelation } = req.body;
+    const { title, textContent, textFormat, videoUrl, parentRelation } = req.body;
+    const videoPayloadRaw = req.body.video;
 
     // Get existing node to check if it's a reply
     const existingNode = await prisma.node.findUnique({
@@ -156,23 +278,63 @@ export const updateNode = async (req: Request, res: Response): Promise<Response 
       }
     }
 
+    let videoData: VideoPrismaData | null = null;
+    try {
+      const normalizedVideoPayload = normaliseVideoPayload(
+        videoPayloadRaw ??
+          (videoUrl !== undefined
+            ? videoUrl
+              ? { source: 'upload', url: videoUrl }
+              : null
+            : undefined),
+      );
+      videoData = await resolveVideoData(normalizedVideoPayload);
+    } catch (videoError: any) {
+      return res.status(422).json({
+        error: 'unprocessable',
+        message: videoError?.message || 'Invalid video payload',
+      });
+    }
+
+    // Determine textFormat: use provided format, or auto-detect Delta JSON
+    let detectedTextFormat: 'plain' | 'markdown' | 'html' | 'delta' | undefined = undefined;
+    if (textFormat !== undefined) {
+      if (['plain', 'markdown', 'html', 'delta'].includes(textFormat)) {
+        detectedTextFormat = textFormat as 'plain' | 'markdown' | 'html' | 'delta';
+      }
+    } else if (textContent !== undefined && textContent) {
+      // Auto-detect Delta JSON format
+      try {
+        const parsed = JSON.parse(textContent);
+        if (parsed && typeof parsed === 'object' && Array.isArray(parsed.ops)) {
+          detectedTextFormat = 'delta';
+        }
+      } catch {
+        // Not JSON, don't change format
+      }
+    }
+
     const updatedNode = await prisma.node.update({
       where: { id: nodeId },
       data: {
         ...(title !== undefined && { title }),
         ...(textContent !== undefined && { textContent }),
-        ...(videoUrl !== undefined && { videoUrl }),
+        ...(detectedTextFormat !== undefined && { textFormat: detectedTextFormat }),
         ...(parentRelation !== undefined && { parentRelation }),
+        ...(videoData !== null ? videoData : {}),
         editedAt: new Date(),
+      },
+      include: {
+        author: {
+          select: {
+            id: true,
+            displayName: true,
+          },
+        },
       },
     });
 
-    return res.status(200).json({
-      nodeId: updatedNode.id,
-      title: updatedNode.title,
-      parentRelation: updatedNode.parentRelation,
-      editedAt: updatedNode.editedAt,
-    });
+    return res.status(200).json(transformNodeToResponse(updatedNode));
   } catch (error: any) {
     if (error.code === 'P2025') {
       return res.status(404).json({ error: 'not_found', message: 'Node not found' });

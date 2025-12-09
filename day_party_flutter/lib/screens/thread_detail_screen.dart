@@ -7,6 +7,7 @@ import '../providers/auth_provider.dart';
 import '../widgets/user_profile_action.dart';
 import '../widgets/video_player_widget.dart';
 import '../widgets/html_content_widget.dart';
+import '../widgets/external_video_card.dart';
 import 'login_screen.dart';
 
 class ThreadDetailScreen extends StatefulWidget {
@@ -21,6 +22,22 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
 	final _service = ThreadService();
 	Future<ThreadDetailResponse>? _future;
 	String? _selectedNodeId; // Track the currently selected node (null = root)
+
+	/// Parse textFormat string to TextFormat enum
+	TextFormat? _parseTextFormat(String format) {
+		switch (format.toLowerCase()) {
+			case 'plain':
+				return TextFormat.plain;
+			case 'markdown':
+				return TextFormat.markdown;
+			case 'html':
+				return TextFormat.html;
+			case 'delta':
+				return TextFormat.delta;
+			default:
+				return null;
+		}
+	}
 
 	@override
 	void initState() {
@@ -217,15 +234,27 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
 													],
 												),
 												const SizedBox(height: 8),
-                                            if (selectedNode.textContent != null)
+												if (selectedNode.textContent != null)
 													HtmlContentWidget(
 														content: selectedNode.textContent!,
 														textStyle: const TextStyle(fontSize: 14),
+														format: selectedNode.textFormat != null 
+															? _parseTextFormat(selectedNode.textFormat!)
+															: null,
 													),
-                                            if (selectedNode.videoUrl != null) ...[
-                                                const SizedBox(height: 12),
-                                                VideoPlayerWidget(urlOrPath: selectedNode.videoUrl!, height: 220),
-                                            ],
+												if (selectedNode.video != null) ...[
+													const SizedBox(height: 12),
+													if (selectedNode.video!.source == VideoSource.external)
+														ExternalVideoCard(attachment: selectedNode.video!)
+													else
+														VideoPlayerWidget(
+															urlOrPath: selectedNode.video!.url ?? '',
+															height: 220,
+														),
+												] else if (selectedNode.legacyVideoUrl != null) ...[
+													const SizedBox(height: 12),
+													VideoPlayerWidget(urlOrPath: selectedNode.legacyVideoUrl!, height: 220),
+												],
 												const SizedBox(height: 16),
 												Row(
 													mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -237,7 +266,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
 																	onPressed: () {},
 																	tooltip: 'Like',
 																),
-																Text('${rootNode.voteTallies.like}'),
+																Text('${selectedNode.voteTallies.like}'),
 															],
 														),
 														Column(
@@ -247,7 +276,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
 																	onPressed: () {},
 																	tooltip: 'Dislike',
 																),
-																Text('${rootNode.voteTallies.dislike}'),
+																Text('${selectedNode.voteTallies.dislike}'),
 															],
 														),
 													],
@@ -408,17 +437,29 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
 																node.title,
 																style: const TextStyle(fontWeight: FontWeight.w600),
 															),
-                                                        if (node.textContent != null) ...[
-															const SizedBox(height: 4),
-															HtmlContentWidget(
-																content: node.textContent!,
-																textStyle: const TextStyle(fontSize: 14),
-															),
-														],
-                                                        if (node.videoUrl != null) ...[
-                                                            const SizedBox(height: 8),
-                                                            VideoPlayerWidget(urlOrPath: node.videoUrl!, height: 180),
-                                                        ],
+															if (node.textContent != null) ...[
+																const SizedBox(height: 4),
+																HtmlContentWidget(
+																	content: node.textContent!,
+																	textStyle: const TextStyle(fontSize: 14),
+																	format: node.textFormat != null 
+																		? _parseTextFormat(node.textFormat!)
+																		: null,
+																),
+															],
+															if (node.video != null) ...[
+																const SizedBox(height: 8),
+																if (node.video!.source == VideoSource.external)
+																	ExternalVideoCard(attachment: node.video!)
+																else
+																	VideoPlayerWidget(
+																		urlOrPath: node.video!.url ?? '',
+																		height: 180,
+																	),
+															] else if (node.legacyVideoUrl != null) ...[
+																const SizedBox(height: 8),
+																VideoPlayerWidget(urlOrPath: node.legacyVideoUrl!, height: 180),
+															],
 														const SizedBox(height: 12),
 														Row(
 															mainAxisAlignment: MainAxisAlignment.spaceAround,

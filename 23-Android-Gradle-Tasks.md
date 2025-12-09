@@ -2,6 +2,17 @@
 
 You can run these Gradle commands from Cursor's terminal to build, test, and deploy your Android app.
 
+## ⚠️ IMPORTANT: Windows Command Line Syntax
+
+**FOR AI AGENTS AND DEVELOPERS**: This project runs on **Windows PowerShell**. 
+
+- **DO NOT use `&&`** to chain commands (this is Unix/Linux syntax)
+- **USE `;` (semicolon)** instead to chain commands in PowerShell
+- Example: `cd dir1 ; cd dir2` ✅ (correct for Windows)
+- Example: `cd dir1 && cd dir2` ❌ (will fail on Windows)
+
+See `03-Decision-Log.md` for full details on Windows command line constraints.
+
 ## Prerequisites
 
 Make sure you have:
@@ -51,8 +62,9 @@ adb devices
 adb -s emulator-5554 shell getprop ro.product.model
 
 # Port Forwarding for OAuth (REQUIRED for emulator testing)
-# Forward emulator's localhost:3000 to host machine's localhost:3000
-# This allows Google OAuth redirects to work in emulator
+# ADB Reverse Port Forwarding: Forward emulator's localhost:3000 to host machine's localhost:3000
+# This creates a TCP tunnel that allows Google OAuth redirects to work in emulator
+# See EMULATOR_SETUP.md in project root for complete documentation
 
 # Option 1: Use the helper script (recommended)
 cd day_party_flutter
@@ -76,7 +88,7 @@ adb logcat -c
 adb logcat | findstr "DayParty"
 
 # Clear logs and view fresh output
-# Note: On Windows, use ; instead of && for chaining commands
+# IMPORTANT: On Windows PowerShell, use ; (semicolon) NOT && (ampersand-ampersand)
 adb logcat -c ; adb logcat
 
 # Filter by specific tags (useful for debugging)

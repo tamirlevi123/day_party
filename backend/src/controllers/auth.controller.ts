@@ -186,10 +186,16 @@ export const handleGoogleCallback = async (req: Request, res: Response): Promise
               }, 2000);
             }
             
-            // Try deep link on page load
+            // Try deep link on page load (with delay for emulator)
             window.onload = function() {
-              tryDeepLink();
+              // Small delay to ensure page is fully loaded
+              setTimeout(function() {
+                tryDeepLink();
+              }, 500);
             };
+            
+            // Also try immediately (for faster devices)
+            tryDeepLink();
           </script>
         </head>
         <body>

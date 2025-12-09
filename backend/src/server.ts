@@ -1,5 +1,6 @@
 import express from 'express';
 import dotenv from 'dotenv';
+import path from 'path';
 import { PrismaClient } from '@prisma/client';
 import apiRoutes from './routes';
 import { errorHandler, notFoundHandler } from './middleware/error.middleware';
@@ -11,6 +12,9 @@ const PORT = parseInt(process.env.PORT || '3000', 10);
 export const prisma = new PrismaClient();
 
 app.use(express.json());
+
+// Serve static files from public directory
+app.use(express.static(path.join(__dirname, '../public')));
 
 // CORS middleware for Android emulator
 app.use((req, res, next): void => {
@@ -48,6 +52,11 @@ app.get('/db/ping', async (_req, res) => {
 
 // API routes
 app.use('/api', apiRoutes);
+
+// Admin panel route - serve index.html for /admin
+app.get('/admin', (_req, res) => {
+  res.sendFile(path.join(__dirname, '../public/admin/index.html'));
+});
 
 // Error handling (must be last)
 app.use(notFoundHandler);

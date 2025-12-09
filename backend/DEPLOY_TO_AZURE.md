@@ -129,6 +129,11 @@ npx prisma migrate deploy
 
 # Or if using db push (development)
 # npx prisma db push
+
+# 📌 New (Nov 2025): External video links
+# If migrate deploy is not available, run the SQL in
+# `prisma/migrations/20251110090000_add_external_video_support/migration.sql`
+# to add the new columns and enum values required for linked videos.
 ```
 
 ## Step 7: Start with PM2

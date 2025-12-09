@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -10,11 +11,11 @@ import 'logger.dart';
 class ApiClient {
   // Backend endpoints
   static const String _azureVmBaseUrl = 'https://dayparty.work.gd/api';
-  static const String _localDeviceBaseUrl = 'http://192.168.0.101:3000/api';
   static const String _androidEmulatorBaseUrl = 'http://10.0.2.2:3000/api';
-
-  // Toggle between Azure VM and local development backend
-  static const bool _useAzureVm = true;
+  
+  // Allow insecure SSL certificates for development (self-signed certs)
+  // WARNING: Only use this in development! Never enable in production.
+  static const bool _allowInsecureSSL = true;
 
   static String? _baseUrl;
 
@@ -50,38 +51,28 @@ class ApiClient {
             product.contains('emulator') ||
             model.contains('google_sdk');
 
-        if (_useAzureVm) {
-          // Use Azure VM for both emulator and physical device
-          appLogger.d('Using Azure VM backend: $_azureVmBaseUrl');
-          return _azureVmBaseUrl;
+        // Emulator uses local dev server, physical device uses Azure VM
+        if (isEmulator) {
+          appLogger.d('Detected Android emulator - using local dev server: $_androidEmulatorBaseUrl');
+          return _androidEmulatorBaseUrl;
         } else {
-          // Use local backend
-          if (isEmulator) {
-            appLogger.d('Detected Android emulator - using $_androidEmulatorBaseUrl');
-            return _androidEmulatorBaseUrl;
-          } else {
-            appLogger.d('Detected physical Android device - using $_localDeviceBaseUrl');
-            return _localDeviceBaseUrl;
-          }
+          appLogger.d('Detected physical Android device - using Azure VM backend: $_azureVmBaseUrl');
+          return _azureVmBaseUrl;
         }
       } catch (e) {
         appLogger.w('Error detecting device type, defaulting to emulator', error: e);
         return _androidEmulatorBaseUrl;
       }
     } else if (Platform.isIOS) {
-      if (_useAzureVm) {
-        return _azureVmBaseUrl;
-      } else {
-        return _localDeviceBaseUrl;
-      }
+      // For iOS, assume physical device (use Azure VM)
+      // iOS Simulator detection could be added here if needed
+      appLogger.d('Detected iOS device - using Azure VM backend: $_azureVmBaseUrl');
+      return _azureVmBaseUrl;
     }
 
-    // Default fallback
-    if (_useAzureVm) {
-      return _azureVmBaseUrl;
-    } else {
-      return 'http://localhost:3000/api';
-    }
+    // Default fallback (for other platforms)
+    appLogger.d('Unknown platform - defaulting to Azure VM backend: $_azureVmBaseUrl');
+    return _azureVmBaseUrl;
   }
 
   static const String _tokenKey = 'jwt_token';
@@ -93,16 +84,35 @@ class ApiClient {
 
   static Dio? _dio;
 
+  /// Configure SSL certificate validation for development
+  /// This allows self-signed certificates and bypasses hostname verification
+  static void _configureSSL(Dio dio) {
+    if (_allowInsecureSSL && !kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+      (dio.httpClientAdapter as IOHttpClientAdapter).createHttpClient = () {
+        final client = HttpClient();
+        // Allow self-signed certificates and bypass hostname verification
+        client.badCertificateCallback = (X509Certificate cert, String host, int port) {
+          appLogger.w('Allowing insecure SSL connection to $host:$port (development mode)');
+          return true; // Accept all certificates in development
+        };
+        return client;
+      };
+      appLogger.w('⚠️ Insecure SSL mode enabled for development. This should NEVER be enabled in production!');
+    }
+  }
+
   static Dio get instance {
     _dio ??= Dio(BaseOptions(
       baseUrl: baseUrl,
-      connectTimeout: const Duration(seconds: 10),
-      receiveTimeout: const Duration(seconds: 30),
+      connectTimeout: const Duration(seconds: 30), // Increased from 10 to 30 seconds
+      receiveTimeout: const Duration(seconds: 60), // Increased from 30 to 60 seconds
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       },
     ));
+    // Apply SSL configuration if needed
+    _configureSSL(_dio!);
     return _dio!;
   }
 
@@ -113,15 +123,21 @@ class ApiClient {
     _baseUrl = url;
 
     // Create Dio instance with the determined baseUrl
+    // Increased timeout for physical device connections (may be slower)
     _dio = Dio(BaseOptions(
       baseUrl: _baseUrl!,
-      connectTimeout: const Duration(seconds: 10),
-      receiveTimeout: const Duration(seconds: 30),
+      connectTimeout: const Duration(seconds: 30), // Increased from 10 to 30 seconds
+      receiveTimeout: const Duration(seconds: 60), // Increased from 30 to 60 seconds
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       },
     ));
+
+    // Configure SSL certificate validation for development
+    // This handles cases where HTTP requests are redirected to HTTPS,
+    // or when connecting to servers with self-signed certificates
+    _configureSSL(_dio!);
 
     appLogger.d('API Client initialized with baseUrl: $_baseUrl');
   }
@@ -161,11 +177,17 @@ class ApiClient {
       },
     ));
 
-    // Add logging interceptor
+    // Add logging interceptor with enhanced error details
     _dio!.interceptors.add(LogInterceptor(
       requestBody: true,
       responseBody: true,
       error: true,
+      requestHeader: true,
+      responseHeader: false,
+      logPrint: (obj) {
+        // Use our logger instead of print
+        appLogger.d(obj.toString());
+      },
     ));
   }
 }

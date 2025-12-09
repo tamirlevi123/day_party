@@ -5,7 +5,9 @@ class Node {
   final String? parentRelation; // "pro", "against", "neutral"
   final String title;
   final String? textContent;
-  final String? videoUrl;
+  final String? textFormat; // 'plain', 'markdown', 'html', 'delta'
+  final String? legacyVideoUrl;
+  final VideoAttachment? video;
   final Author? author;
   final VoteTallies voteTallies;
   final String createdAt;
@@ -18,12 +20,18 @@ class Node {
     this.parentRelation,
     required this.title,
     this.textContent,
-    this.videoUrl,
+    this.textFormat,
+    this.legacyVideoUrl,
+    this.video,
     this.author,
     required this.voteTallies,
     required this.createdAt,
     this.editedAt,
   });
+
+  bool get hasVideo => video != null || legacyVideoUrl != null;
+  bool get hasExternalVideo => video?.source == VideoSource.external;
+  String? get videoUrl => video?.url ?? legacyVideoUrl;
 
   factory Node.fromJson(Map<String, dynamic> json) {
     return Node(
@@ -33,12 +41,78 @@ class Node {
       parentRelation: json['parentRelation'],
       title: json['title'],
       textContent: json['textContent'],
-      videoUrl: json['videoUrl'],
+      textFormat: json['textFormat'],
+      legacyVideoUrl: json['videoUrl'],
+      video: json['video'] != null ? VideoAttachment.fromJson(json['video']) : null,
       author: json['author'] != null ? Author.fromJson(json['author']) : null,
       voteTallies: VoteTallies.fromJson(json['voteTallies']),
       createdAt: json['createdAt'],
       editedAt: json['editedAt'],
     );
+  }
+}
+
+class VideoAttachment {
+  final VideoSource source;
+  final String? url;
+  final String? provider;
+  final String? providerId;
+  final String? thumbnailUrl;
+  final int? durationSec;
+  final String? embedHtml;
+  final Map<String, dynamic>? metadata;
+  final String? title;
+  final String? description;
+
+  const VideoAttachment({
+    required this.source,
+    this.url,
+    this.provider,
+    this.providerId,
+    this.thumbnailUrl,
+    this.durationSec,
+    this.embedHtml,
+    this.metadata,
+    this.title,
+    this.description,
+  });
+
+  factory VideoAttachment.fromJson(Map<String, dynamic> json) {
+    Map<String, dynamic>? metadata;
+    if (json['metadata'] is Map<String, dynamic>) {
+      metadata = Map<String, dynamic>.from(json['metadata']);
+    }
+    return VideoAttachment(
+      source: VideoSourceExtension.fromJson(json['source']),
+      url: json['url'],
+      provider: json['provider'],
+      providerId: json['providerId'],
+      thumbnailUrl: json['thumbnailUrl'],
+      durationSec: json['durationSec'],
+      embedHtml: json['embedHtml'],
+      metadata: metadata,
+      title: json['title'] ?? metadata?['title'],
+      description: json['description'] ?? metadata?['description'],
+    );
+  }
+
+  bool get isExternal => source == VideoSource.external;
+}
+
+enum VideoSource {
+  upload,
+  external,
+}
+
+extension VideoSourceExtension on VideoSource {
+  static VideoSource fromJson(String? value) {
+    switch (value) {
+      case 'external':
+        return VideoSource.external;
+      case 'upload':
+      default:
+        return VideoSource.upload;
+    }
   }
 }
 

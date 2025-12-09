@@ -96,6 +96,22 @@ class ThreadListScreen extends StatelessWidget {
             );
           },
         ),
+        floatingActionButton: FloatingActionButton(
+          onPressed: () async {
+            final result = await Navigator.pushNamed(
+              context,
+              '/create-thread',
+              arguments: topicId,
+            );
+            // Refresh threads if a thread was created
+            if (result != null && context.mounted) {
+              final provider = Provider.of<ThreadProvider>(context, listen: false);
+              await provider.loadThreads(topicId);
+            }
+          },
+          child: const Icon(Icons.add),
+          tooltip: 'צור דיון חדש',
+        ),
       ),
     );
   }

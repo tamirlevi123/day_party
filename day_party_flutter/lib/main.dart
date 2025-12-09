@@ -14,6 +14,7 @@ import 'screens/home_screen.dart';
 import 'screens/thread_list_screen.dart';
 import 'screens/thread_detail_screen.dart';
 import 'screens/create_node_screen.dart';
+import 'screens/create_thread_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -185,6 +186,10 @@ class _DayPartyAppState extends State<DayPartyApp> {
               parentNodeId: args['parentNodeId'] as String?,
               title: args['title'] as String?,
             );
+          },
+          '/create-thread': (context) {
+            final topicId = ModalRoute.of(context)!.settings.arguments as String;
+            return CreateThreadScreen(topicId: topicId);
           },
         },
       ),

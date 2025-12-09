@@ -1,0 +1,11 @@
+allprojects {
+    afterEvaluate { project ->
+        if (project.name == "flutter_inappwebview") {
+            def android = project.extensions.findByName("android")
+            if (android != null && android.hasProperty("namespace") && android.namespace == null) {
+                android.namespace = "com.pichillilorenzo.flutter_inappwebview"
+            }
+        }
+    }
+}
+

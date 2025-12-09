@@ -166,33 +166,37 @@ class _VideoScrubberState extends State<_VideoScrubber> {
   @override
   Widget build(BuildContext context) {
     final total = widget.controller.value.duration;
-    return Row(
-      children: [
-        IconButton(
-          icon: Icon(widget.controller.value.isPlaying ? Icons.pause : Icons.play_arrow),
-          onPressed: () {
-            if (widget.controller.value.isPlaying) {
-              widget.controller.pause();
-            } else {
-              widget.controller.play();
-            }
-          },
-        ),
-        Expanded(
-          child: Slider(
-            value: _position.inMilliseconds.clamp(0, total.inMilliseconds).toDouble(),
-            min: 0,
-            max: total.inMilliseconds.toDouble().clamp(1, double.infinity),
-            onChanged: (v) {
-              widget.controller.seekTo(Duration(milliseconds: v.toInt()));
+    // Force LTR direction for video controls (slider should go left to right)
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: Row(
+        children: [
+          IconButton(
+            icon: Icon(widget.controller.value.isPlaying ? Icons.pause : Icons.play_arrow),
+            onPressed: () {
+              if (widget.controller.value.isPlaying) {
+                widget.controller.pause();
+              } else {
+                widget.controller.play();
+              }
             },
           ),
-        ),
-        Padding(
-          padding: const EdgeInsets.only(right: 8),
-          child: Text(_fmt(_position)),
-        ),
-      ],
+          Expanded(
+            child: Slider(
+              value: _position.inMilliseconds.clamp(0, total.inMilliseconds).toDouble(),
+              min: 0,
+              max: total.inMilliseconds.toDouble().clamp(1, double.infinity),
+              onChanged: (v) {
+                widget.controller.seekTo(Duration(milliseconds: v.toInt()));
+              },
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Text(_fmt(_position)),
+          ),
+        ],
+      ),
     );
   }
 

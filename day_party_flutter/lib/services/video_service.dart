@@ -71,5 +71,58 @@ class VideoService {
       throw Exception('Failed to delete video: $e');
     }
   }
+
+  Future<VideoPreview> previewExternalLink(String url) async {
+    try {
+      final response = await _dio.post(
+        '/videos/preview',
+        data: {'url': url},
+      );
+      return VideoPreview.fromJson(response.data as Map<String, dynamic>);
+    } on DioException catch (e) {
+      final message = e.response?.data['message'] ?? 'Failed to preview video link';
+      throw Exception(message);
+    } catch (e) {
+      throw Exception('שגיאה בשליפת תצוגה מקדימה: $e');
+    }
+  }
 }
 
+class VideoPreview {
+  final String provider;
+  final String normalizedUrl;
+  final String? providerId;
+  final String? title;
+  final String? description;
+  final int? durationSec;
+  final String? thumbnailUrl;
+  final String? embedHtml;
+
+  VideoPreview({
+    required this.provider,
+    required this.normalizedUrl,
+    this.providerId,
+    this.title,
+    this.description,
+    this.durationSec,
+    this.thumbnailUrl,
+    this.embedHtml,
+  });
+
+  factory VideoPreview.fromJson(Map<String, dynamic> json) {
+    return VideoPreview(
+      provider: (json['provider'] as String?) ?? 'other',
+      normalizedUrl: json['normalizedUrl'] as String? ?? json['url'] as String? ?? '',
+      providerId: json['providerId'] as String?,
+      title: json['title'] as String?,
+      description: json['description'] as String?,
+      durationSec: json['durationSec'] is num ? (json['durationSec'] as num).toInt() : null,
+      thumbnailUrl: json['thumbnailUrl'] as String?,
+      embedHtml: json['embedHtml'] as String?,
+    );
+  }
+
+  bool get hasThumbnail => thumbnailUrl != null && thumbnailUrl!.isNotEmpty;
+  bool get isYouTube => provider.toLowerCase() == 'youtube';
+  bool get isVimeo => provider.toLowerCase() == 'vimeo';
+}

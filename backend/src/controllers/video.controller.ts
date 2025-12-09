@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import multer from 'multer';
 import { driveService, UploadVideoResult } from '../services/drive.service';
+import { getVideoPreview } from '../services/video-link.service';
 
 // Configure multer for memory storage (don't save to disk)
 const storage = multer.memoryStorage();
@@ -118,6 +119,44 @@ export const deleteVideo = async (req: Request, res: Response): Promise<Response
     return res.status(500).json({
       error: 'delete_failed',
       message: error.message || 'Failed to delete video',
+    });
+  }
+};
+
+/**
+ * Fetch metadata for an external video link
+ * POST /api/videos/preview
+ * Body: { url: string }
+ */
+export const previewExternalVideo = async (req: Request, res: Response): Promise<Response | void> => {
+  try {
+    const { url } = req.body;
+
+    if (!url || typeof url !== 'string') {
+      return res.status(400).json({
+        error: 'validation_error',
+        message: 'A video URL is required',
+      });
+    }
+
+    const preview = await getVideoPreview(url);
+
+    return res.status(200).json({
+      provider: preview.provider,
+      providerId: preview.providerId,
+      normalizedUrl: preview.normalizedUrl,
+      title: preview.title,
+      description: preview.description,
+      durationSec: preview.durationSec,
+      thumbnailUrl: preview.thumbnailUrl,
+      embedHtml: preview.embedHtml,
+      metadata: preview.metadata,
+    });
+  } catch (error: any) {
+    const message = error?.message || 'Failed to fetch video metadata';
+    return res.status(400).json({
+      error: 'preview_failed',
+      message,
     });
   }
 };

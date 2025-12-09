@@ -53,10 +53,12 @@ Main Navigation (Bottom Nav)
 4. **Create/Edit Node**
    - Title input
    - Text editor (markdown/plain)
-   - Video upload/picker
+   - Media section with two options:
+     - Upload video from device (existing Drive workflow)
+     - Paste external link (YouTube/Vimeo/other) with inline preview + validation
    - Anonymous toggle
    - Preview
-   - Post/Update button
+   - Post/Update button (disabled until required fields valid)
 
 5. **Search/Discover**
    - Search bar (topics, threads, nodes)
@@ -108,7 +110,9 @@ Node Detail → Tap Like/Dislike/Abstain → Confirm
 #### Flow 4: Create & Reply
 ```
 Thread Detail → Tap Reply/New Post → Create Node Screen
-  → Enter title → Upload text/video → (Optional: anonymous)
+  → Enter title
+  → (Optional) Add media: upload video OR paste/validate external link
+  → (Optional) Toggle anonymous
   → Post → Node appears in thread tree → Notifications sent
 ```
 

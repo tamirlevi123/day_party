@@ -68,25 +68,95 @@ POST /auth/logout
 Deep link example (AndroidManifest):
 scheme: dayparty  host: auth  pathPrefix: /callback
 
+### Threads
+
+POST /threads
+- Body: { topicId, title, description? }
+- Auth: Required
+- Rules: `topicId` must reference an existing topic. `title` is required, max 500 characters. `description` is optional.
+- Returns: { threadId, topicId, title, description, status, createdAt }
+
+GET /threads/{threadId}
+- Returns: { thread: { threadId, topicId, title, description, status, createdAt }, nodes: [...] }
+- Returns thread with all its nodes (excluding deleted nodes)
+
+GET /threads/{threadId}/nodes
+- Returns: [{ nodeId, threadId, parentNodeId, parentRelation, title, textContent, video, author, voteTallies, createdAt, ... }]
+- Returns all nodes for a thread (excluding deleted nodes)
+
 ### Nodes
 
 POST /nodes
-- Body: { threadId, parentNodeId?, parentRelation?: 'pro' | 'against' | 'neutral', title, textContent?, videoUrl?, isAnonymous?: boolean }
-- Rules: parentRelation required if parentNodeId provided (must be 'pro', 'against', or 'neutral'). parentRelation must be NULL for root nodes (when parentNodeId is null).
-- Returns: { nodeId, threadId, parentNodeId, parentRelation, title, author, createdAt }
+- Body:  
+  ```
+  {
+    threadId,
+    parentNodeId?,
+    parentRelation?: 'pro' | 'against' | 'neutral',
+    title,
+    textContent?,
+    video?: {
+      source: 'upload' | 'external',
+      uploadId?: string,           // Drive object reference when source='upload'
+      externalUrl?: string,        // e.g., https://youtu.be/...
+      provider?: 'youtube' | 'vimeo' | 'other'
+    },
+    isAnonymous?: boolean
+  }
+  ```
+- Rules: parentRelation required if parentNodeId provided (must be 'pro', 'against', or 'neutral'). parentRelation must be NULL for root nodes (when parentNodeId is null). `video` object optional; when provided, exactly one of `uploadId` or `externalUrl` must be present. For known providers (YouTube/Vimeo) backend derives provider metadata and stores embed HTML.
+- Returns: { nodeId, threadId, parentNodeId, parentRelation, title, textContent, video, author, createdAt }
 
 PATCH /nodes/{nodeId}
-- Body: { title?, textContent?, videoUrl?, parentRelation?: 'pro' | 'against' | 'neutral' }
-- Rules: parentRelation can only be changed if node is a reply (has parentNodeId). Cannot add parentRelation to root node.
-- Returns: { nodeId, title, parentRelation, editedAt }
+- Body: { title?, textContent?, video?: { source, uploadId?, externalUrl?, provider? }, parentRelation?: 'pro' | 'against' | 'neutral' }
+- Rules: parentRelation can only be changed if node is a reply (has parentNodeId). Cannot add parentRelation to root node. Video updates follow same exclusivity rule (either switch to upload or external link). Setting `video` to null removes video.
+- Returns: { nodeId, title, textContent, video, parentRelation, editedAt }
 
 GET /nodes/{nodeId}
-- Returns: { nodeId, threadId, parentNodeId, parentRelation, title, textContent, videoUrl, author, voteTallies, createdAt }
+- Returns: { nodeId, threadId, parentNodeId, parentRelation, title, textContent, video: { source, url, provider, providerId, embedHtml, thumbnailUrl, durationSec }, author, voteTallies, createdAt }
+
+### Video Metadata Helper
+
+POST /videos/preview
+- Body: { url }
+- Returns: { provider: 'youtube' | 'vimeo' | 'other', providerId, normalizedUrl, title, description, durationSec?, thumbnailUrl, embedHtml }
+- Rules: Requires auth; validates URL against allowlist; caches response for short TTL. Clients call before POST /nodes to show preview and capture metadata. Backend re-validates when saving node.
+
+### Admin Endpoints (Admin Role Required)
+
+All admin endpoints require authentication and admin role. Returns 403 if user is not admin.
+
+#### Node Management
+
+GET /admin/nodes
+- Query params: `threadId?`, `authorId?`, `isDeleted?` (true/false), `moderationState?`, `limit?` (default: 50), `offset?` (default: 0)
+- Returns: `{ nodes: [...], pagination: { total, limit, offset } }`
+- Lists all nodes (including deleted) with optional filters
+
+GET /admin/nodes/{nodeId}
+- Returns: Full node object (including deleted nodes)
+- Admin can view any node, including deleted ones
+
+PATCH /admin/nodes/{nodeId}
+- Body: `{ title?, textContent?, textFormat?, parentRelation?, moderationState?, isAnonymous?, video?: {...} }`
+- Returns: Updated node object
+- Admin can edit any field of any node, including moderation state
+- Creates a version history entry with change summary "Admin edit"
+
+DELETE /admin/nodes/{nodeId}
+- Returns: `{ message: "Node deleted successfully", node: {...} }`
+- Soft deletes the node (sets `isDeleted: true`, `moderationState: 'removed'`)
+- Creates a version history entry with change summary "Admin deletion"
+
+POST /admin/nodes/{nodeId}/restore
+- Returns: `{ message: "Node restored successfully", node: {...} }`
+- Restores a deleted node (sets `isDeleted: false`, `moderationState: 'visible'`)
+- Creates a version history entry with change summary "Admin restoration"
 
 ### Common Errors
-- 400: validation_error
+- 400: validation_error, bad_request
 - 401: unauthorized
-- 403: forbidden
+- 403: forbidden (admin access required)
 - 404: not_found
 - 409: conflict (e.g., vote closed)
 - 422: unprocessable (e.g., not a root node for deadline, invalid parentRelation for node type)

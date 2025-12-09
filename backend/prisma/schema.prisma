@@ -135,6 +135,11 @@ model Node {
   videoUrl                String?          @map("video_url") @db.VarChar(2048)
   videoDurationSec        Int?             @map("video_duration_sec")
   videoThumbnailUrl       String?          @map("video_thumbnail_url") @db.VarChar(2048)
+  videoSource             VideoSource      @default(upload) @map("video_source")
+  videoProvider           VideoProvider?   @map("video_provider")
+  videoProviderId         String?          @map("video_provider_id") @db.VarChar(255)
+  videoEmbedHtml          String?          @map("video_embed_html") @db.Text
+  videoMetadataJson       Json?            @map("video_metadata_json")
   
   // Metadata
   textLanguage            String?          @map("text_language") @db.VarChar(10)
@@ -192,6 +197,11 @@ model NodeVersion {
   videoUrl         String?          @map("video_url") @db.VarChar(2048)
   videoDurationSec Int?             @map("video_duration_sec")
   videoThumbnailUrl String?         @map("video_thumbnail_url") @db.VarChar(2048)
+  videoSource      VideoSource?     @map("video_source")
+  videoProvider    VideoProvider?   @map("video_provider")
+  videoProviderId  String?          @map("video_provider_id") @db.VarChar(255)
+  videoEmbedHtml   String?          @map("video_embed_html") @db.Text
+  videoMetadataJson Json?           @map("video_metadata_json")
   textLanguage     String?          @map("text_language") @db.VarChar(10)
   textConfidence   Decimal?         @map("text_confidence") @db.Decimal(5, 4)
   textStatus       ContentStatus    @map("text_status")
@@ -338,11 +348,13 @@ enum TextFormat {
   markdown
   plain
   html
+  delta
 }
 
 enum ContentStatus {
   provided
   generated
+  linked
   missing
 }
 
@@ -357,6 +369,17 @@ enum VoteType {
   like
   dislike
   abstain
+}
+
+enum VideoSource {
+  upload
+  external
+}
+
+enum VideoProvider {
+  youtube
+  vimeo
+  other
 }
 
 enum TargetModality {
