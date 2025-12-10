@@ -29,6 +29,7 @@ Use this index to navigate key deliverables. Keep entries concise and link out.
 - 24 Android Project Analysis — `24-Android-Project-Analysis.md`
 - 26 Windows Development Environment — `26-Windows-Development-Environment.md` ⚠️ **READ FIRST**
 - **Emulator Setup** — `EMULATOR_SETUP.md` ⚠️ **REQUIRED FOR EMULATOR TESTING**
+- **Database Operations** — `backend/DATABASE_OPERATIONS.md` 📊 **MySQL Workbench Guide**
 
 ### Working Conventions
 - **Source of truth**: Creative Brief and Decision Log.

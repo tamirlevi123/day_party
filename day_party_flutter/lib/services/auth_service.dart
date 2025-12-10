@@ -2,8 +2,10 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import '../core/api_client.dart';
 import '../core/logger.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../utils/web_redirect.dart';
 // Note: google_sign_in package included in pubspec but using backend OAuth flow
 // import 'package:google_sign_in/google_sign_in.dart';
 
@@ -57,12 +59,19 @@ class AuthService {
   // Start Google OAuth flow
   Future<void> signInWithGoogle() async {
     try {
+      // Determine redirect URI based on platform
+      final redirectUri = kIsWeb 
+        ? '${Uri.base.origin}/auth/callback'  // Web: use current origin
+        : 'dayparty://auth/callback';          // Mobile: deep link
+      
+      appLogger.d('Using redirect URI: $redirectUri');
+
       // Step 1: Get authorization URL from backend
       final response = await _dio.post(
         '/auth/social/start',
         data: {
           'provider': 'google',
-          'redirectUri': 'dayparty://auth/callback',
+          'redirectUri': redirectUri,
         },
       );
 
@@ -74,23 +83,28 @@ class AuthService {
       // Step 2: Launch browser for OAuth
       final uri = Uri.parse(authorizationUrl);
       
-      // Try to launch the URL - use platformDefault first (works better in emulator)
-      try {
-        final launched = await launchUrl(
-          uri,
-          mode: LaunchMode.platformDefault,
-        );
-        
-        if (!launched) {
-          // Fallback: try externalApplication if platformDefault fails
-          await launchUrl(
+      if (kIsWeb) {
+        // On web, redirect the current window using window.location.href
+        await redirectToUrl(authorizationUrl);
+      } else {
+        // On mobile, launch external browser
+        try {
+          final launched = await launchUrl(
             uri,
-            mode: LaunchMode.externalApplication,
+            mode: LaunchMode.platformDefault,
           );
+          
+          if (!launched) {
+            // Fallback: try externalApplication if platformDefault fails
+            await launchUrl(
+              uri,
+              mode: LaunchMode.externalApplication,
+            );
+          }
+        } catch (e) {
+          // If launch fails, provide more detailed error
+          throw Exception('Could not launch OAuth URL: $e. Make sure a browser is installed.');
         }
-      } catch (e) {
-        // If launch fails, provide more detailed error
-        throw Exception('Could not launch OAuth URL: $e. Make sure a browser is installed.');
       }
     } on DioException catch (e) {
       if (e.response?.statusCode == 404) {
@@ -111,7 +125,7 @@ class AuthService {
     }
   }
 
-  // Handle OAuth callback from deep link URL
+  // Handle OAuth callback from deep link URL (mobile) or URL parameters (web)
   // Extracts code from URL and exchanges it for JWT tokens
   Future<void> handleOAuthCallback(String callbackUrl) async {
     try {
@@ -123,13 +137,18 @@ class AuthService {
         throw Exception('No code found in callback URL');
       }
       
+      // Determine redirect URI based on platform
+      final redirectUri = kIsWeb 
+        ? '${Uri.base.origin}/auth/callback'  // Web: use current origin
+        : 'dayparty://auth/callback';          // Mobile: deep link
+      
       // Exchange code for tokens
       final response = await _dio.post(
         '/auth/social/callback',
         data: {
           'provider': 'google',
           'code': code,
-          'redirectUri': 'dayparty://auth/callback',
+          'redirectUri': redirectUri,
         },
       );
 

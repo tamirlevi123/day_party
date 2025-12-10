@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:app_links/app_links.dart';
@@ -47,7 +48,77 @@ class _DayPartyAppState extends State<DayPartyApp> {
     // Delay deep link initialization to ensure MaterialApp is built
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initDeepLinks();
+      // On web, check for OAuth callback in URL
+      if (kIsWeb) {
+        _checkWebOAuthCallback();
+      }
     });
+  }
+
+  // Check for OAuth callback in URL (web only)
+  void _checkWebOAuthCallback() {
+    final uri = Uri.base;
+    
+    // Check if this is an OAuth callback
+    if (uri.path == '/auth/callback' && uri.queryParameters.containsKey('code')) {
+      appLogger.d('Detected OAuth callback in URL: $uri');
+      
+      // Wait a bit for providers to be ready
+      Future.delayed(const Duration(milliseconds: 500), () {
+        final navigatorContext = _navigatorKey.currentContext;
+        if (navigatorContext == null) {
+          // Retry if context not ready
+          Future.delayed(const Duration(milliseconds: 500), () => _checkWebOAuthCallback());
+          return;
+        }
+        
+        final authProvider = Provider.of<AuthProvider>(navigatorContext, listen: false);
+        final navigator = _navigatorKey.currentState;
+        
+        // Build the full callback URL
+        final callbackUrl = uri.toString();
+        
+        // Handle the OAuth callback
+        authProvider.handleOAuthCallback(callbackUrl).then((success) {
+          if (!mounted || navigator == null) return;
+          
+          if (success) {
+            // Clear the URL parameters and navigate to home
+            // On web, we can use window.history.replaceState to clean the URL
+            if (kIsWeb) {
+              // Import dart:html if needed, or use a different approach
+              // For now, just navigate - the URL will stay but that's okay
+            }
+            
+            // Navigate to home screen on success
+            navigator.pushNamedAndRemoveUntil(
+              '/home',
+              (route) => false,
+            );
+          } else {
+            // Show error if failed
+            if (mounted) {
+              _scaffoldMessengerKey.currentState?.showSnackBar(
+                SnackBar(
+                  content: Text(authProvider.error ?? 'שגיאה בהתחברות'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          }
+        }).catchError((error) {
+          appLogger.e('Error handling OAuth callback', error: error);
+          if (mounted) {
+            _scaffoldMessengerKey.currentState?.showSnackBar(
+              SnackBar(
+                content: Text('שגיאה: $error'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        });
+      });
+    }
   }
 
   void _initDeepLinks() {
@@ -152,7 +223,7 @@ class _DayPartyAppState extends State<DayPartyApp> {
             brightness: Brightness.light,
           ),
           useMaterial3: true,
-          cardTheme: CardTheme(
+          cardTheme: CardThemeData(
             elevation: 2,
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           ),

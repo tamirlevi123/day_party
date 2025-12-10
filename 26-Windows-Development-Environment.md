@@ -45,29 +45,27 @@ cd backend && npm install && npm run build
 - For sequential command execution, use `;`
 - CMD also uses `;` but has different syntax for other operations
 
-### Bypassing PowerShell Execution Policy
+### Running NPM Scripts on Windows
 
-**⚠️ IMPORTANT**: If you encounter PowerShell execution policy errors when running npm scripts:
+**⚠️ CRITICAL**: **ALWAYS use `cmd /c` prefix when running npm scripts** to avoid PowerShell script restrictions:
 
-```
-npm : File E:\nodejs\npm.ps1 cannot be loaded because running scripts is disabled on this system.
-```
-
-**Solution**: Use `cmd /c` to bypass PowerShell restrictions:
-
-✅ **Correct:**
+✅ **Correct (REQUIRED):**
 ```powershell
 cmd /c npm run db:update-enum-delta
 cmd /c npm run db:generate
 cmd /c npm run build
+cmd /c npm run cleanup:imported -- --topic-name "Topic Name"
 ```
 
 ❌ **Incorrect (will fail with execution policy error):**
 ```powershell
 npm run db:update-enum-delta
+npm run build
 ```
 
-**Why this works**: `cmd /c` runs the command in CMD instead of PowerShell, bypassing PowerShell's execution policy restrictions while still allowing the command to execute properly.
+**Why this is required**: PowerShell has execution policy restrictions that prevent npm scripts from running directly. Using `cmd /c` runs the command in CMD instead of PowerShell, bypassing these restrictions while still allowing the command to execute properly.
+
+**Note**: This is not just for error cases - it's the standard way to run npm scripts in this Windows environment.
 
 ### Prisma Client Generation Errors (EPERM)
 
@@ -192,9 +190,9 @@ Windows PowerShell Command Chaining:
   command1 ; command2 ; command3    ✅ CORRECT
   command1 && command2 && command3  ❌ WRONG (Unix/Linux only)
 
-NPM Scripts (if execution policy errors):
-  cmd /c npm run script-name        ✅ CORRECT (bypasses PowerShell restrictions)
-  npm run script-name                ❌ MAY FAIL (PowerShell execution policy)
+NPM Scripts (REQUIRED):
+  cmd /c npm run script-name        ✅ CORRECT (REQUIRED - bypasses PowerShell restrictions)
+  npm run script-name                ❌ WRONG (will fail with PowerShell execution policy)
 
 File Operations:
   copy src dest                     ✅ CORRECT

@@ -24,6 +24,8 @@ class RichTextEditor extends StatefulWidget {
 
 class RichTextEditorState extends State<RichTextEditor> {
   late final QuillController _controller;
+  late final FocusNode _focusNode;
+  late final ScrollController _scrollController;
   bool _isInitialized = false;
   bool _isSettingInitialValue = false; // Flag to prevent onChanged during initialization
 
@@ -33,6 +35,8 @@ class RichTextEditorState extends State<RichTextEditor> {
     
     // Initialize controller with empty document
     _controller = QuillController.basic();
+    _focusNode = FocusNode();
+    _scrollController = ScrollController();
     
     // Set up change listener
     _controller.document.changes.listen((event) {
@@ -132,6 +136,8 @@ class RichTextEditorState extends State<RichTextEditor> {
   @override
   void dispose() {
     _controller.dispose();
+    _focusNode.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -220,64 +226,23 @@ class RichTextEditorState extends State<RichTextEditor> {
         children: [
           // Editor
           Expanded(
-            child: QuillEditor.basic(
-              configurations: QuillEditorConfigurations(
-                controller: _controller,
-                placeholder: widget.hintText ?? 'הכנס תוכן...',
-                padding: const EdgeInsets.all(16),
-                sharedConfigurations: const QuillSharedConfigurations(
-                  locale: Locale('he'),
-                ),
-              ),
+            child: QuillEditor(
+              controller: _controller,
+              focusNode: _focusNode,
+              scrollController: _scrollController,
             ),
           ),
           // Toolbar at bottom - prevents overlap with selection menu
+          // TODO: Re-implement toolbar with flutter_quill v11 API
           Material(
             elevation: 4,
             color: Colors.grey.shade100,
             child: SizedBox(
               height: 48,
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: QuillToolbar.simple(
-                  configurations: QuillSimpleToolbarConfigurations(
-                    controller: _controller,
-                    sharedConfigurations: const QuillSharedConfigurations(
-                      locale: Locale('he'),
-                    ),
-                    showBoldButton: true,
-                    showItalicButton: true,
-                    showUnderLineButton: true,
-                    showStrikeThrough: false,
-                    showInlineCode: false,
-                    showColorButton: false,
-                    showBackgroundColorButton: false,
-                    showClearFormat: true,
-                    showAlignmentButtons: false,
-                    showLeftAlignment: false,
-                    showCenterAlignment: false,
-                    showRightAlignment: false,
-                    showJustifyAlignment: false,
-                    showHeaderStyle: false,
-                    showListNumbers: true,
-                    showListBullets: true,
-                    showListCheck: false,
-                    showCodeBlock: false,
-                    showQuote: false,
-                    showIndent: false,
-                    showLink: true,
-                    showUndo: true,
-                    showRedo: true,
-                    showDirection: false,
-                    showSearchButton: false,
-                    showSubscript: false,
-                    showSuperscript: false,
-                    showFontFamily: false,
-                    showFontSize: false,
-                    showDividers: true,
-                    showSmallButton: false,
-                    toolbarIconAlignment: WrapAlignment.start,
-                  ),
+              child: Center(
+                child: Text(
+                  'Toolbar - needs flutter_quill v11 API',
+                  style: TextStyle(color: Colors.grey),
                 ),
               ),
             ),

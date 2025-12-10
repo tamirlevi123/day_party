@@ -1,12 +1,62 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:convert';
 import '../providers/thread_provider.dart';
 import '../widgets/user_profile_action.dart';
+import '../widgets/html_content_widget.dart';
 
 class ThreadListScreen extends StatelessWidget {
   final String topicId;
 
   const ThreadListScreen({super.key, required this.topicId});
+
+  /// Extract plain text preview from Delta JSON or HTML
+  Widget _buildDescriptionPreview(String description) {
+    // Try to parse as Delta JSON
+    try {
+      final decoded = jsonDecode(description);
+      if (decoded is Map && decoded.containsKey('ops')) {
+        // It's Delta JSON - extract plain text
+        final ops = decoded['ops'] as List;
+        final buffer = StringBuffer();
+        for (final op in ops) {
+          if (op is Map && op.containsKey('insert')) {
+            final insert = op['insert'];
+            if (insert is String) {
+              buffer.write(insert);
+            }
+          }
+        }
+        final plainText = buffer.toString().trim();
+        return Text(
+          plainText,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        );
+      }
+    } catch (e) {
+      // Not JSON, treat as plain text or HTML
+    }
+    
+    // Check if it's HTML
+    if (description.trim().startsWith('<')) {
+      // Use HtmlContentWidget but limit height
+      return SizedBox(
+        height: 40,
+        child: HtmlContentWidget(
+          content: description,
+          format: TextFormat.html,
+        ),
+      );
+    }
+    
+    // Plain text
+    return Text(
+      description,
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -68,11 +118,7 @@ class ThreadListScreen extends StatelessWidget {
                         if (thread.description != null)
                           Padding(
                             padding: const EdgeInsets.only(top: 4),
-                            child: Text(
-                              thread.description!,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                            child: _buildDescriptionPreview(thread.description!),
                           ),
                         Padding(
                           padding: const EdgeInsets.only(top: 4),

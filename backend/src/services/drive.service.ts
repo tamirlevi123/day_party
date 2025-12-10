@@ -191,6 +191,50 @@ class DriveService {
       throw new Error(`Failed to get file info: ${error.message}`);
     }
   }
+
+  /**
+   * Get a readable stream for a video file from Google Drive
+   * This can be used to proxy videos for web playback
+   * @param fileId - Google Drive file ID
+   * @returns Object with stream and metadata (mimeType, size)
+   */
+  async getVideoStream(fileId: string): Promise<{ stream: Readable; mimeType: string; size?: number }> {
+    this.ensureInitialized();
+    try {
+      console.log(`DriveService: Getting file info for fileId: ${fileId}`);
+      // First get file metadata to determine MIME type
+      const fileInfo = await this.getFileInfo(fileId);
+      const mimeType = fileInfo.mimeType || 'video/mp4';
+      const size = fileInfo.size ? parseInt(fileInfo.size, 10) : undefined;
+      console.log(`DriveService: File info - mimeType: ${mimeType}, size: ${size}`);
+
+      // Get the file stream using alt=media
+      console.log(`DriveService: Fetching media stream for fileId: ${fileId}`);
+      const response = await this.drive.files.get(
+        {
+          fileId,
+          alt: 'media',
+        },
+        {
+          responseType: 'stream',
+        }
+      );
+
+      console.log(`DriveService: Successfully got stream for fileId: ${fileId}`);
+      return {
+        stream: response.data as Readable,
+        mimeType,
+        size,
+      };
+    } catch (error: any) {
+      console.error('DriveService: Error getting video stream:', error);
+      if (error.response) {
+        console.error('DriveService: Error response status:', error.response.status);
+        console.error('DriveService: Error response data:', error.response.data);
+      }
+      throw new Error(`Failed to get video stream: ${error.message}`);
+    }
+  }
 }
 
 // Singleton instance
