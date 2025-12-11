@@ -24,15 +24,26 @@ async function cleanupImportedThreads() {
     const topicName = topicNameIndex >= 0 && args[topicNameIndex + 1] 
       ? args[topicNameIndex + 1] 
       : TOPIC_NAME;
+    const topicIdIndex = args.indexOf('--topic-id');
+    const topicId = topicIdIndex >= 0 && args[topicIdIndex + 1] 
+      ? args[topicIdIndex + 1] 
+      : null;
     const deleteUsers = args.includes('--delete-users');
-
-    console.log(`📁 Looking for topic: "${topicName}"\n`);
 
     // Find the topic
     console.log('🔍 Searching for topic...');
-    const topic = await prisma.topic.findFirst({
-      where: { name: topicName },
-    });
+    let topic;
+    if (topicId) {
+      console.log(`📁 Looking for topic by ID: "${topicId}"\n`);
+      topic = await prisma.topic.findUnique({
+        where: { id: topicId },
+      });
+    } else {
+      console.log(`📁 Looking for topic by name: "${topicName}"\n`);
+      topic = await prisma.topic.findFirst({
+        where: { name: topicName },
+      });
+    }
     console.log('✅ Topic search complete\n');
 
     if (!topic) {

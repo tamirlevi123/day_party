@@ -146,6 +146,7 @@ model Node {
   textConfidence          Decimal?         @map("text_confidence") @db.Decimal(5, 4)
   textStatus              ContentStatus    @default(missing) @map("text_status")
   videoStatus             ContentStatus    @default(missing) @map("video_status")
+  metadataJson            Json?            @map("metadata_json")
   
   // Moderation
   moderationState         ModerationState  @default(visible) @map("moderation_state")

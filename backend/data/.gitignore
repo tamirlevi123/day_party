@@ -1,0 +1,6 @@
+# Knesset database file (can be large, should be generated/downloaded)
+knesset_data.db
+
+# Keep directory but ignore database file
+!.gitignore
+

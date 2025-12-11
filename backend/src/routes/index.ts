@@ -6,6 +6,7 @@ import topicRoutes from './topic.routes';
 import authRoutes from './auth.routes';
 import videoRoutes from './video.routes';
 import adminRoutes from './admin.routes';
+import knessetDatabaseRoutes from './knesset-database.routes';
 
 const router = express.Router();
 
@@ -16,6 +17,7 @@ router.use('/nodes', voteRoutes);
 router.use('/threads', threadRoutes);
 router.use('/videos', videoRoutes);
 router.use('/admin', adminRoutes);
+router.use('/knesset-database', knessetDatabaseRoutes);
 
 export default router;
 

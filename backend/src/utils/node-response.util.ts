@@ -63,6 +63,7 @@ export const transformNodeToResponse = (node: NodeWithAuthor) => ({
     : null,
   createdAt: node.createdAt.toISOString(),
   editedAt: node.editedAt?.toISOString() || null,
+  metadata: mapMetadata(node.metadataJson),
   // Admin fields (for admin endpoints)
   moderationState: node.moderationState,
   isDeleted: node.isDeleted,
