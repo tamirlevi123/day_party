@@ -244,7 +244,6 @@ export const proxyGoogleDriveVideo = async (req: Request, res: Response): Promis
     let stream: Readable;
     let mimeType: string;
     let size: number | undefined;
-    let usingDirectUrl = false;
     
     // Try Google Drive API first (if credentials are configured)
     try {
@@ -257,7 +256,6 @@ export const proxyGoogleDriveVideo = async (req: Request, res: Response): Promis
       // API failed (likely invalid credentials) - use direct download URL for public files
       console.warn('Proxy video: Google Drive API failed, using direct download URL:', apiError.message);
       console.log('Proxy video: Using direct download URL (files are publicly accessible)');
-      usingDirectUrl = true;
       
       try {
         // Use direct download URL format for publicly accessible files
