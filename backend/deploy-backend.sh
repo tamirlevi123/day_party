@@ -3,7 +3,7 @@ set -e
 
 echo "🚀 Starting deployment..."
 
-cd ~/dayparty-api/backend
+cd ~/dayparty/backend
 
 echo "📥 Pulling latest code..."
 git pull origin master
