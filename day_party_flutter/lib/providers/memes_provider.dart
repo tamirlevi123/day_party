@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:math';
 import '../services/topic_service.dart';
 import '../models/thread.dart';
 import '../core/logger.dart';
@@ -51,14 +52,14 @@ class MemesProvider with ChangeNotifier {
     }
   }
 
-  /// Get a random meme
-  ThreadSummary? getRandomMeme() {
+  /// Get a random meme using the provided Random instance
+  ThreadSummary? getRandomMeme(Random random) {
     if (_memes.isEmpty) return null;
-    final random = DateTime.now().millisecondsSinceEpoch % _memes.length;
-    return _memes[random];
+    return _memes[random.nextInt(_memes.length)];
   }
 
   /// Get a meme deterministically based on an index (for consistent display)
+  /// Kept for backward compatibility, but prefer getRandomMeme for random selection
   ThreadSummary? getMemeByIndex(int index) {
     if (_memes.isEmpty) return null;
     return _memes[index % _memes.length];

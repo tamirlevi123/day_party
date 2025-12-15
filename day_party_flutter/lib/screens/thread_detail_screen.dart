@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:math';
 import '../services/thread_service.dart';
 import '../models/thread.dart';
 import '../models/node.dart';
@@ -705,7 +706,9 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
 														// Show a meme every 4 replies
 														const memeInterval = 4;
 														final widgets = <Widget>[];
-														
+														// Create a Random instance for this build cycle to randomly select memes
+														final random = Random();
+
 														for (int i = 0; i < replies.length; i++) {
 															final node = replies[i];
 															
@@ -903,7 +906,8 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
 															if ((i + 1) % memeInterval == 0 && 
 																i < replies.length - 1 && 
 																memesProvider.hasMemes) {
-																final meme = memesProvider.getRandomMeme();
+																// Randomly select a meme for this position
+																final meme = memesProvider.getRandomMeme(random);
 																if (meme != null) {
 																	widgets.add(MemeCard(memeThread: meme));
 																}

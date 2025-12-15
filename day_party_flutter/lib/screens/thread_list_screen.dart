@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'dart:convert';
 import '../providers/thread_provider.dart';
 import '../providers/memes_provider.dart';
+import '../providers/knesset/knesset_database_provider.dart';
 import '../widgets/user_profile_action.dart';
 import '../widgets/html_content_widget.dart';
 import '../widgets/meme_card.dart';
@@ -11,6 +12,61 @@ class ThreadListScreen extends StatelessWidget {
   final String topicId;
 
   const ThreadListScreen({super.key, required this.topicId});
+
+  /// Get unique statuses for Knesset 25 bills, grouped by description
+  /// Returns a list where each entry has a description and all StatusIDs with that description
+  Future<List<Map<String, dynamic>>> _getKnesset25Statuses(KnessetDatabaseProvider provider) async {
+    try {
+      // Get all statuses and filter to those that appear in Knesset 25 bills
+      final allStatuses = await provider.getAllStatuses();
+      final bills = await provider.getBillsByKnesset(knessetNum: 25);
+      final statusIDsInKnesset25 = bills.map((b) => b.statusID).toSet();
+      
+      // Filter statuses to only those that appear in Knesset 25
+      final knesset25Statuses = allStatuses
+          .where((status) => statusIDsInKnesset25.contains(status['StatusID']))
+          .toList();
+      
+      // Group by description (Desc field) - treat statuses with same name as one
+      final Map<String, List<int>> statusesByDesc = {};
+      for (final status in knesset25Statuses) {
+        final desc = status['Desc'] as String;
+        final statusID = status['StatusID'] as int;
+        if (!statusesByDesc.containsKey(desc)) {
+          statusesByDesc[desc] = [];
+        }
+        statusesByDesc[desc]!.add(statusID);
+      }
+      
+      // Convert to list format with description and all StatusIDs
+      final uniqueStatuses = statusesByDesc.entries.map((entry) {
+        final statusIDs = entry.value;
+        statusIDs.sort(); // Sort StatusIDs for consistency
+        return {
+          'Desc': entry.key,
+          'StatusIDs': statusIDs, // List of all StatusIDs with this description
+          'StatusID': statusIDs.first, // Primary StatusID (first one, for display)
+        };
+      }).toList();
+      
+      // Sort by description
+      uniqueStatuses.sort((a, b) => (a['Desc'] as String).compareTo(b['Desc'] as String));
+      
+      return uniqueStatuses;
+    } catch (e) {
+      return [];
+    }
+  }
+
+  /// Get status description for a status ID
+  Future<String?> _getStatusDescription(BuildContext context, int statusID) async {
+    try {
+      final provider = Provider.of<KnessetDatabaseProvider>(context, listen: false);
+      return await provider.getStatusDescription(statusID);
+    } catch (e) {
+      return null;
+    }
+  }
 
   /// Extract plain text preview from Delta JSON or HTML
   Widget _buildDescriptionPreview(String description) {
@@ -62,10 +118,13 @@ class ThreadListScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MultiProvider(
+            return MultiProvider(
       providers: [
         ChangeNotifierProvider(
-          create: (_) => ThreadProvider()..loadThreads(topicId),
+          create: (_) => ThreadProvider(),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => KnessetDatabaseProvider(),
         ),
         // Ensure MemesProvider is available and initialized
         ChangeNotifierProxyProvider<ThreadProvider, MemesProvider>(
@@ -86,136 +145,256 @@ class ThreadListScreen extends StatelessWidget {
             UserProfileAction(),
           ],
         ),
-        body: Consumer<ThreadProvider>(
-          builder: (context, provider, child) {
-            if (provider.isLoading) {
-              return const Center(child: CircularProgressIndicator());
-            }
-
-            if (provider.error != null) {
-              return Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text('Error: ${provider.error}'),
-                    const SizedBox(height: 16),
-                    ElevatedButton(
-                      onPressed: () => provider.loadThreads(topicId),
-                      child: const Text('Retry'),
-                    ),
-                  ],
-                ),
-              );
-            }
-
-            if (provider.threads.isEmpty) {
-              return const Center(
-                child: Text('No threads in this topic'),
-              );
-            }
-
-            return Consumer<MemesProvider>(
-              builder: (context, memesProvider, _) {
-                // Ensure memes are loaded if not already (needed to detect memes topic)
-                if (memesProvider.memesTopicId == null && !memesProvider.isLoading) {
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    memesProvider.loadMemes();
-                  });
-                }
-                
-                // Check if we're viewing the memes topic
-                final isMemesTopic = memesProvider.isMemesTopic(topicId);
-                
-                if (isMemesTopic) {
-                  // For memes topic: show ALL threads as meme cards with images
-                  return ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: provider.threads.length,
-                    itemBuilder: (context, index) {
-                      final thread = provider.threads[index];
-                      return MemeCard(
-                        key: ValueKey('meme_${thread.threadId}_$index'),
-                        memeThread: thread,
-                      );
-                    },
-                  );
-                }
-                
-                // For other topics: mix memes every 3 threads
-                const memeInterval = 3;
-                final memeCount = (provider.threads.length / memeInterval).floor();
-                final totalItems = provider.threads.length + memeCount;
-                
-                return ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: totalItems,
-                  itemBuilder: (context, index) {
-                    // Determine if this should be a meme or a thread
-                    final position = index + 1;
-                    final shouldShowMeme = position % (memeInterval + 1) == 0 && 
-                                          memesProvider.hasMemes;
-                    
-                    if (shouldShowMeme) {
-                      // Use index to deterministically select a meme for this position
-                      // This ensures the same meme is shown at the same position every time
-                      final memeIndex = (position ~/ (memeInterval + 1)) - 1;
-                      final meme = memesProvider.getMemeByIndex(memeIndex);
-                      if (meme != null) {
-                        return MemeCard(
-                          key: ValueKey('meme_${meme.threadId}_$index'), // Unique key per meme card instance
-                          memeThread: meme,
-                        );
-                      }
+        body: Column(
+          children: [
+            // Status filter dropdown
+            Consumer<KnessetDatabaseProvider>(
+              builder: (context, knessetProvider, _) {
+                return FutureBuilder<List<Map<String, dynamic>>>(
+                  future: _getKnesset25Statuses(knessetProvider),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) {
+                      return const SizedBox.shrink();
                     }
-                    
-                    // Calculate thread index (accounting for memes shown before)
-                    final threadIndex = index - (position ~/ (memeInterval + 1));
-                    if (threadIndex >= 0 && threadIndex < provider.threads.length) {
-                      final thread = provider.threads[threadIndex];
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        child: ListTile(
-                          title: Text(
-                            thread.title,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 16,
-                            ),
-                          ),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              if (thread.description != null)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 4),
-                                  child: _buildDescriptionPreview(thread.description!),
-                                ),
-                              Padding(
-                                padding: const EdgeInsets.only(top: 4),
-                                child: Text(
-                                  '${thread.nodeCount} posts',
-                                  style: const TextStyle(fontSize: 12),
-                                ),
+                    final statuses = snapshot.data!;
+                    return Consumer<ThreadProvider>(
+                      builder: (context, threadProvider, _) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.surface,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.05),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
                               ),
                             ],
                           ),
-                          onTap: () {
-                            Navigator.pushNamed(
-                              context,
-                              '/thread-detail',
-                              arguments: thread.threadId,
-                            );
-                          },
-                        ),
-                      );
-                    }
-                    
-                    return const SizedBox.shrink();
+                          child: DropdownButtonFormField<String?>(
+                            value: threadProvider.statusFilter,
+                            decoration: const InputDecoration(
+                              labelText: 'סטטוס',
+                              border: OutlineInputBorder(),
+                              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            ),
+                            items: <DropdownMenuItem<String?>>[
+                              const DropdownMenuItem<String?>(
+                                value: null,
+                                child: Text('הכל'),
+                              ),
+                              ...statuses.map<DropdownMenuItem<String?>>((status) {
+                                final statusIDs = status['StatusIDs'] as List<int>;
+                                final desc = status['Desc'] as String;
+                                // Use comma-separated StatusIDs as the value
+                                final statusIDsValue = statusIDs.join(',');
+                                // Show description with all StatusIDs in parentheses
+                                final statusIDsDisplay = statusIDs.length > 1 
+                                  ? statusIDs.join(', ')
+                                  : statusIDs.first.toString();
+                                return DropdownMenuItem<String?>(
+                                  value: statusIDsValue,
+                                  child: Text('$desc ($statusIDsDisplay)'),
+                                );
+                              }),
+                            ],
+                            onChanged: (value) {
+                              final memesProvider = Provider.of<MemesProvider>(context, listen: false);
+                              threadProvider.setStatusFilter(
+                                topicId, 
+                                value,
+                                availableMemes: memesProvider.hasMemes ? memesProvider.memes : null,
+                              );
+                            },
+                            isExpanded: true,
+                          ),
+                        );
+                      },
+                    );
                   },
                 );
               },
-            );
-          },
+            ),
+            // Thread list
+            Expanded(
+              child: Consumer<ThreadProvider>(
+                builder: (context, provider, child) {
+                  return Consumer<MemesProvider>(
+                    builder: (context, memesProvider, _) {
+                      // Load threads when provider is first created
+                      if (provider.threads.isEmpty && !provider.isLoading) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          provider.loadThreads(topicId, availableMemes: memesProvider.hasMemes ? memesProvider.memes : null);
+                        });
+                      }
+                      
+                      // Ensure memes are loaded if not already (needed to detect memes topic)
+                      if (memesProvider.memesTopicId == null && !memesProvider.isLoading) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          memesProvider.loadMemes();
+                        });
+                      }
+                      
+                      // Reassign memes when they become available after threads are already loaded
+                      if (provider.threads.isNotEmpty && 
+                          memesProvider.hasMemes && 
+                          provider.memeAssignments.isEmpty) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          provider.reassignMemes(memesProvider.memes);
+                        });
+                      }
+                      
+                      if (provider.isLoading) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+
+                      if (provider.error != null) {
+                        return Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text('Error: ${provider.error}'),
+                              const SizedBox(height: 16),
+                              ElevatedButton(
+                                onPressed: () => provider.loadThreads(topicId, availableMemes: memesProvider.hasMemes ? memesProvider.memes : null),
+                                child: const Text('Retry'),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+
+                      if (provider.threads.isEmpty) {
+                        return const Center(
+                          child: Text('No threads in this topic'),
+                        );
+                      }
+                    
+                      // Check if we're viewing the memes topic
+                      final isMemesTopic = memesProvider.isMemesTopic(topicId);
+                      
+                      if (isMemesTopic) {
+                        // For memes topic: show ALL threads as meme cards with images
+                        return ListView.builder(
+                          padding: const EdgeInsets.all(16),
+                          itemCount: provider.threads.length,
+                          itemBuilder: (context, index) {
+                            final thread = provider.threads[index];
+                            return MemeCard(
+                              key: ValueKey('meme_${thread.threadId}_$index'),
+                              memeThread: thread,
+                            );
+                          },
+                        );
+                      }
+                      
+                      // For other topics: mix memes every 3 threads using pre-assigned memes
+                      const memeInterval = 3;
+                      final memeCount = (provider.threads.length / memeInterval).floor();
+                      final totalItems = provider.threads.length + memeCount;
+                      
+                      return ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: totalItems,
+                        itemBuilder: (context, index) {
+                          // Check if this position has a pre-assigned meme
+                          if (provider.memeAssignments.containsKey(index)) {
+                            final meme = provider.memeAssignments[index]!;
+                            return MemeCard(
+                              key: ValueKey('meme_${meme.threadId}_$index'),
+                              memeThread: meme,
+                            );
+                          }
+                          
+                          // Calculate thread index (accounting for memes shown before)
+                          // Count how many memes appear before this index
+                          int memesBefore = 0;
+                          for (int i = 0; i < index; i++) {
+                            if (provider.memeAssignments.containsKey(i)) {
+                              memesBefore++;
+                            }
+                          }
+                          // Thread index is the current index minus memes shown before
+                          final threadIndex = index - memesBefore;
+                          if (threadIndex >= 0 && threadIndex < provider.threads.length) {
+                            final thread = provider.threads[threadIndex];
+                            return Card(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              child: ListTile(
+                                title: Text(
+                                  thread.title,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                subtitle: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    if (thread.description != null)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 4),
+                                        child: _buildDescriptionPreview(thread.description!),
+                                      ),
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 4),
+                                      child: Row(
+                                        children: [
+                                          Text(
+                                            '${thread.nodeCount} posts',
+                                            style: const TextStyle(fontSize: 12),
+                                          ),
+                                          if (thread.billStatusID != null)
+                                            FutureBuilder<String?>(
+                                              future: _getStatusDescription(context, thread.billStatusID!),
+                                              builder: (context, snapshot) {
+                                                if (snapshot.hasData && snapshot.data != null) {
+                                                  return Padding(
+                                                    padding: const EdgeInsets.only(right: 8),
+                                                    child: Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                                      decoration: BoxDecoration(
+                                                        color: Theme.of(context).colorScheme.primaryContainer,
+                                                        borderRadius: BorderRadius.circular(4),
+                                                      ),
+                                                      child: Text(
+                                                        snapshot.data!,
+                                                        style: TextStyle(
+                                                          fontSize: 11,
+                                                          color: Theme.of(context).colorScheme.onPrimaryContainer,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  );
+                                                }
+                                                return const SizedBox.shrink();
+                                              },
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                onTap: () {
+                                  Navigator.pushNamed(
+                                    context,
+                                    '/thread-detail',
+                                    arguments: thread.threadId,
+                                  );
+                                },
+                              ),
+                            );
+                          }
+                          
+                          return const SizedBox.shrink();
+                        },
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
         ),
         floatingActionButton: FloatingActionButton(
           onPressed: () async {
