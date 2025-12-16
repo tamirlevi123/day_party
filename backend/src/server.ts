@@ -70,7 +70,7 @@ app.get('/db/ping', async (_req, res) => {
 });
 
 // Request logging middleware (for debugging) - log ALL requests
-app.use((req, res, next) => {
+app.use((req, _res, next) => {
   console.log(`[Server] ${req.method} ${req.path} from ${req.ip}`);
   if (req.path.includes('knesset')) {
     console.log(`[Server] Knesset-related request detected: ${req.method} ${req.path}`);

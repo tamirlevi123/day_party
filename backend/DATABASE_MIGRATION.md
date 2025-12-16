@@ -2,6 +2,32 @@
 
 This guide covers migrating MySQL data from your development server to the production Azure VM.
 
+## Quick Sync Script (Recommended)
+
+**For Windows (PowerShell):**
+```powershell
+cd E:\day_party\backend\scripts
+.\sync-db-to-prod.ps1
+```
+
+**For Linux/Mac (Bash):**
+```bash
+cd backend/scripts
+chmod +x sync-db-to-prod.sh
+./sync-db-to-prod.sh
+```
+
+The script will:
+1. Export MySQL database from dev server
+2. Compress the dump file
+3. Transfer to production server via SCP
+4. Backup current production database
+5. Import the dev database
+6. Run Prisma migrations
+7. Rebuild and restart the application
+
+**Manual Steps (if you prefer):**
+
 ## Prerequisites
 
 - MySQL client tools installed on both dev and production servers
@@ -10,7 +36,9 @@ This guide covers migrating MySQL data from your development server to the produ
 
 ## Step 1: Export Database from Development Server
 
-### Option A: Using MySQL Workbench (Easiest)
+### ⭐ Option A: Using MySQL Workbench (RECOMMENDED)
+
+**⚠️ IMPORTANT: MySQL Workbench is the recommended method for creating database dumps. Command-line `mysqldump` may produce dumps that fail to import properly due to encoding, formatting, or path issues. MySQL Workbench handles these automatically.**
 
 1. Open **MySQL Workbench**
 2. Connect to your development database
@@ -21,7 +49,15 @@ This guide covers migrating MySQL data from your development server to the produ
 7. Click **Start Export**
 8. Save the file (e.g., `dayparty-dev-export.sql`)
 
+**Why MySQL Workbench is preferred:**
+- Handles encoding (UTF-8/UTF-16) automatically
+- Produces properly formatted SQL that imports reliably
+- Avoids path and encoding issues that can cause silent import failures
+- Better error reporting during export
+
 ### Option B: Using Command Line (Windows PowerShell)
+
+**⚠️ Note: Command-line dumps may fail to import. If import fails silently or completes immediately without importing data, use MySQL Workbench instead.**
 
 ```powershell
 cd E:\day_party\backend
@@ -105,14 +141,27 @@ pm2 stop dayparty-api
 mysqldump -u dayparty -p dayparty > dayparty-production-backup-$(date +%Y%m%d-%H%M%S).sql
 # Password: DayParty2024!SecurePW
 
-# Import the dev database
-# If compressed:
-gunzip -c dayparty-dev-export.sql.gz | mysql -u dayparty -p dayparty
-# Password: DayParty2024!SecurePW
+# Get absolute path to SQL file (required for SOURCE command)
+SQL_FILE=$(readlink -f ~/dayparty-dev-export.sql || realpath ~/dayparty-dev-export.sql || echo "$HOME/dayparty-dev-export.sql")
+echo "Using SQL file: $SQL_FILE"
 
-# Or if not compressed:
-mysql -u dayparty -p dayparty < dayparty-dev-export.sql
-# Password: DayParty2024!SecurePW
+# Import the dev database with proper error handling
+# IMPORTANT: Use absolute path and disable foreign key checks
+mysql -u dayparty -p'DayParty2024!SecurePW' dayparty <<EOF > /tmp/import.log 2>&1
+SET FOREIGN_KEY_CHECKS=0;
+SET UNIQUE_CHECKS=0;
+SET SQL_MODE='NO_AUTO_VALUE_ON_ZERO';
+SOURCE $SQL_FILE;
+SET FOREIGN_KEY_CHECKS=1;
+SET UNIQUE_CHECKS=1;
+EOF
+
+# Check import results
+echo "Exit code: $?"
+cat /tmp/import.log | grep -v "Using a password"
+
+# Verify data was imported (check a specific table)
+mysql -u dayparty -p'DayParty2024!SecurePW' dayparty -e "SELECT COUNT(*) as count FROM _KNS_Faction;" 2>/dev/null
 
 # Verify import
 mysql -u dayparty -p dayparty -e "
@@ -179,11 +228,13 @@ mysql -u dayparty -p dayparty -e "
 ## Important Notes
 
 1. **Backup First**: Always backup production before importing!
-2. **Schema Compatibility**: Ensure production schema matches or is newer than dev schema
-3. **User Accounts**: User passwords and authentication tokens will be migrated
-4. **File Paths**: If your app uses file paths, ensure they're correct for production
-5. **Environment Variables**: Update `.env` on production if needed
-6. **Static Files**: Don't forget to copy `public/memes/` and other static files if needed
+2. **Use MySQL Workbench for Exports**: Command-line `mysqldump` may produce dumps that fail to import. MySQL Workbench is more reliable for creating importable SQL files.
+3. **Schema Compatibility**: Ensure production schema matches or is newer than dev schema
+4. **User Accounts**: User passwords and authentication tokens will be migrated
+5. **File Paths**: If your app uses file paths, ensure they're correct for production
+6. **Environment Variables**: Update `.env` on production if needed
+7. **Static Files**: Don't forget to copy `public/memes/` and other static files if needed
+8. **Verify Import**: Always check that data was actually imported by querying tables (e.g., `SELECT COUNT(*) FROM _KNS_Faction;`) - don't assume success just because the command completed without errors
 
 ## Troubleshooting
 

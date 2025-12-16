@@ -31,3 +31,16 @@ node_modules/
 dist/
 build/
 
+# Database files (SQLite - no longer used, migrated to MySQL)
+*.db
+*.sqlite
+*.sqlite3
+
+# Database dumps (should not be committed)
+*.sql
+!**/migrations/**/*.sql
+
+# Temporary/one-time migration scripts (keep useful ones, but ignore dumps)
+backend/dayparty-dev-export*.sql
+backend/*-export*.sql
+

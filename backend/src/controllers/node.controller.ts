@@ -162,7 +162,8 @@ export const createNode = async (req: Request, res: Response): Promise<Response 
       });
     }
 
-    const { threadId, parentNodeId, parentRelation, title, textContent, textFormat, videoUrl, isAnonymous } = req.body;
+    const { threadId, parentNodeId, parentRelation, title, textFormat, videoUrl, isAnonymous } = req.body;
+    let { textContent } = req.body;
     const videoPayloadRaw = req.body.video;
 
     // Validation: parentRelation required if parentNodeId provided

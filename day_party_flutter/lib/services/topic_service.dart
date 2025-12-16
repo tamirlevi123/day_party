@@ -51,14 +51,44 @@ class TopicService {
 
   Future<List<ThreadSummary>> getTopicThreads(String topicId, {String? statusIDs}) async {
     try {
+      appLogger.i('🟢 TopicService: Fetching threads for topicId=$topicId, statusIDs=$statusIDs');
       final queryParams = statusIDs != null ? {'statusID': statusIDs} : null;
       final response = await _dio.get(
         '/topics/$topicId/threads',
         queryParameters: queryParams,
       );
+      appLogger.i('🟢 TopicService: Received response, status: ${response.statusCode}');
+      
       final data = ThreadsResponse.fromJson(response.data);
-      return data.threads;
-    } catch (e) {
+      final threads = data.threads;
+      
+      appLogger.i('🟢 TopicService: Parsed ${threads.length} threads');
+      
+      // Log metadata information for first few threads
+      if (threads.isNotEmpty) {
+        final threadsWithMetadata = threads.where((t) => t.billStatusID != null).length;
+        final threadsWithoutMetadata = threads.length - threadsWithMetadata;
+        appLogger.i('🟢 TopicService: Threads with billStatusID: $threadsWithMetadata, without: $threadsWithoutMetadata');
+        
+        threads.take(3).toList().asMap().forEach((idx, thread) {
+          appLogger.i('🟢 TopicService: Thread ${idx + 1} (${thread.threadId}):');
+          appLogger.i('🟢 TopicService:   Title: ${thread.title}');
+          appLogger.i('🟢 TopicService:   billId: ${thread.billId}');
+          appLogger.i('🟢 TopicService:   billStatusID: ${thread.billStatusID}');
+          appLogger.i('🟢 TopicService:   statusDescription: ${thread.statusDescription}');
+          appLogger.i('🟢 TopicService:   metadata: ${thread.metadata}');
+        });
+      } else {
+        appLogger.w('🟢 TopicService: WARNING - No threads returned!');
+      }
+      
+      return threads;
+    } catch (e, s) {
+      appLogger.e('🟢 TopicService: Error fetching threads', error: e, stackTrace: s);
+      if (e is DioException) {
+        appLogger.e('🟢 TopicService: DioException details - status: ${e.response?.statusCode}, message: ${e.message}');
+        appLogger.e('🟢 TopicService: Response data: ${e.response?.data}');
+      }
       throw Exception('Failed to fetch topic threads: $e');
     }
   }

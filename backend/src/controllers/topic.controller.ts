@@ -142,6 +142,7 @@ export const getTopicThreads = async (req: Request, res: Response): Promise<Resp
             parentNodeId: null, // Root nodes only
           },
           select: {
+            id: true,
             metadataJson: true,
           },
           take: 1, // Just need the root node metadata
@@ -152,10 +153,36 @@ export const getTopicThreads = async (req: Request, res: Response): Promise<Resp
       },
     });
     console.log(`[SQL] Found ${threads.length} threads`);
+    
+    // Log detailed node/metadata information
+    const threadsWithMetadata = threads.filter(t => t.nodes.length > 0 && t.nodes[0].metadataJson != null).length;
+    const threadsWithoutMetadata = threads.length - threadsWithMetadata;
+    console.log(`[TopicController] Threads with metadata: ${threadsWithMetadata}, without: ${threadsWithoutMetadata}`);
+    
+    // Log first 5 threads' node and metadata details
+    threads.slice(0, 5).forEach((thread, idx) => {
+      const rootNode = thread.nodes[0];
+      console.log(`[TopicController] Thread ${idx + 1} (${thread.id}):`);
+      console.log(`[TopicController]   Title: ${thread.title}`);
+      console.log(`[TopicController]   Node count: ${thread._count.nodes}`);
+      console.log(`[TopicController]   Root node exists: ${rootNode != null}`);
+      if (rootNode) {
+        console.log(`[TopicController]   Root node ID: ${rootNode.id}`);
+        console.log(`[TopicController]   Root node metadataJson: ${JSON.stringify(rootNode.metadataJson)}`);
+        const metadata = rootNode.metadataJson as Record<string, any> | null;
+        if (metadata) {
+          console.log(`[TopicController]   Metadata keys: ${Object.keys(metadata).join(', ')}`);
+          console.log(`[TopicController]   Metadata statusID: ${metadata.statusID}`);
+          console.log(`[TopicController]   Metadata billId: ${metadata.billId}`);
+        } else {
+          console.log(`[TopicController]   Metadata is null`);
+        }
+      }
+    });
 
     // Format response and filter by statusID if provided
     console.log(`[TopicController] Formatting ${threads.length} threads...`);
-    let formattedThreads = threads.map((thread) => {
+    let formattedThreads = threads.map((thread, idx) => {
       const rootNode = thread.nodes[0];
       const metadata = rootNode?.metadataJson as Record<string, any> | null;
       const billStatusID = metadata?.statusID as number | undefined;
@@ -163,13 +190,17 @@ export const getTopicThreads = async (req: Request, res: Response): Promise<Resp
       // Get status description from in-memory cache (no SQL query - uses in-memory cache)
       const statusDescription = getStatusDescription(billStatusID);
       
-      // Log metadata for first few threads
-      if (threads.indexOf(thread) < 3) {
-        console.log(`[TopicController] Thread ${thread.id}:`);
+      // Log metadata for first 5 threads
+      if (idx < 5) {
+        console.log(`[TopicController] Thread ${idx + 1}/${threads.length} (${thread.id}):`);
         console.log(`[TopicController]   Title: ${thread.title}`);
-        console.log(`[TopicController]   Metadata: ${JSON.stringify(metadata)}`);
-        console.log(`[TopicController]   billStatusID: ${billStatusID}`);
-        console.log(`[TopicController]   statusDescription: ${statusDescription || 'null'}`);
+        console.log(`[TopicController]   Root node exists: ${rootNode != null}`);
+        if (rootNode) {
+          console.log(`[TopicController]   Root node ID: ${rootNode.id}`);
+        }
+        console.log(`[TopicController]   Metadata raw: ${JSON.stringify(metadata)}`);
+        console.log(`[TopicController]   Metadata parsed - billStatusID: ${billStatusID}, billId: ${metadata?.billId}`);
+        console.log(`[TopicController]   statusDescription from cache: ${statusDescription || 'null'}`);
         console.log(`[TopicController]   nodeCount: ${thread._count.nodes}`);
       }
 

@@ -120,3 +120,48 @@ Expected response should include:
 - ✅ **Local dev backend:** Working correctly
 - ❌ **Azure VM backend:** Needs deployment update
 - ✅ **Code ready:** All changes committed locally
+
+---
+
+## Database Import Issue Resolution
+
+### Problem
+Database import from command-line `mysqldump` was completing immediately but not importing any data. Tables remained empty after import.
+
+### Root Cause
+Command-line `mysqldump` can produce SQL dumps with:
+- Encoding issues (UTF-16 vs UTF-8)
+- Formatting problems that cause silent import failures
+- Path resolution issues with `SOURCE` command
+
+### Solution
+**Use MySQL Workbench to create database dumps instead of command-line `mysqldump`.**
+
+MySQL Workbench:
+- Handles encoding automatically (UTF-8/UTF-16)
+- Produces properly formatted SQL that imports reliably
+- Avoids path and encoding issues
+- Provides better error reporting
+
+### Steps for Future Imports
+1. **Export:** Use MySQL Workbench → Server → Data Export → Export to Self-Contained File
+2. **Transfer:** Upload SQL file to production server via SCP
+3. **Import:** Use absolute path with `SOURCE` command and proper error handling:
+   ```bash
+   SQL_FILE=$(readlink -f ~/dayparty-dev-export.sql || realpath ~/dayparty-dev-export.sql)
+   mysql -u dayparty -p'DayParty2024!SecurePW' dayparty <<EOF > /tmp/import.log 2>&1
+   SET FOREIGN_KEY_CHECKS=0;
+   SET UNIQUE_CHECKS=0;
+   SET SQL_MODE='NO_AUTO_VALUE_ON_ZERO';
+   SOURCE $SQL_FILE;
+   SET FOREIGN_KEY_CHECKS=1;
+   SET UNIQUE_CHECKS=1;
+   EOF
+   cat /tmp/import.log | grep -v "Using a password"
+   ```
+4. **Verify:** Always check that data was imported:
+   ```bash
+   mysql -u dayparty -p'DayParty2024!SecurePW' dayparty -e "SELECT COUNT(*) FROM _KNS_Faction;"
+   ```
+
+**See `backend/DATABASE_MIGRATION.md` for complete documentation.**

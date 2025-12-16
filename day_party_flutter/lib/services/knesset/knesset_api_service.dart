@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import '../../core/api_client.dart';
 import '../../core/logger.dart';
 
@@ -6,12 +7,27 @@ class KnessetApiService {
   /// Get all statuses
   Future<List<Map<String, dynamic>>> getAllStatuses() async {
     try {
+      appLogger.i('🔵 KnessetApiService: Fetching statuses from /knesset/statuses');
       final response = await ApiClient.instance.get('/knesset/statuses');
+      appLogger.i('🔵 KnessetApiService: Received response, status: ${response.statusCode}');
+      
       final data = response.data as Map<String, dynamic>;
       final statuses = data['statuses'] as List<dynamic>;
+      
+      appLogger.i('🔵 KnessetApiService: Parsed ${statuses.length} statuses');
+      if (statuses.isNotEmpty) {
+        appLogger.i('🔵 KnessetApiService: First 5 statuses: ${statuses.take(5).map((s) => '${s['StatusID']}: ${s['Desc']}').join(", ")}');
+      } else {
+        appLogger.w('🔵 KnessetApiService: WARNING - No statuses returned!');
+      }
+      
       return statuses.cast<Map<String, dynamic>>();
     } catch (e, s) {
-      appLogger.e('KnessetApiService: Error fetching statuses', error: e, stackTrace: s);
+      appLogger.e('🔵 KnessetApiService: Error fetching statuses', error: e, stackTrace: s);
+      if (e is DioException) {
+        appLogger.e('🔵 KnessetApiService: DioException details - status: ${e.response?.statusCode}, message: ${e.message}');
+        appLogger.e('🔵 KnessetApiService: Response data: ${e.response?.data}');
+      }
       return [];
     }
   }

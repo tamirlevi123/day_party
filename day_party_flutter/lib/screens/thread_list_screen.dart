@@ -7,6 +7,7 @@ import '../providers/knesset/knesset_database_provider.dart';
 import '../widgets/user_profile_action.dart';
 import '../widgets/html_content_widget.dart';
 import '../widgets/meme_card.dart';
+import '../core/logger.dart';
 
 class ThreadListScreen extends StatelessWidget {
   final String topicId;
@@ -17,15 +18,30 @@ class ThreadListScreen extends StatelessWidget {
   /// Returns a list where each entry has a description and all StatusIDs with that description
   Future<List<Map<String, dynamic>>> _getKnesset25Statuses(KnessetDatabaseProvider provider) async {
     try {
+      appLogger.i('🟡 ThreadListScreen: _getKnesset25Statuses called');
+      
       // Get all statuses and filter to those that appear in Knesset 25 bills
+      appLogger.i('🟡 ThreadListScreen: Fetching all statuses...');
       final allStatuses = await provider.getAllStatuses();
+      appLogger.i('🟡 ThreadListScreen: Received ${allStatuses.length} statuses from provider');
+      if (allStatuses.isEmpty) {
+        appLogger.w('🟡 ThreadListScreen: WARNING - No statuses received! Dropdown will be empty.');
+      } else {
+        appLogger.i('🟡 ThreadListScreen: First 3 statuses: ${allStatuses.take(3).map((s) => '${s['StatusID']}: ${s['Desc']}').join(", ")}');
+      }
+      
+      appLogger.i('🟡 ThreadListScreen: Fetching Knesset 25 bills...');
       final bills = await provider.getBillsByKnesset(knessetNum: 25);
+      appLogger.i('🟡 ThreadListScreen: Received ${bills.length} bills for Knesset 25');
+      
       final statusIDsInKnesset25 = bills.map((b) => b.statusID).toSet();
+      appLogger.i('🟡 ThreadListScreen: Found ${statusIDsInKnesset25.length} unique statusIDs in Knesset 25 bills: ${statusIDsInKnesset25.take(10).join(", ")}');
       
       // Filter statuses to only those that appear in Knesset 25
       final knesset25Statuses = allStatuses
           .where((status) => statusIDsInKnesset25.contains(status['StatusID']))
           .toList();
+      appLogger.i('🟡 ThreadListScreen: Filtered to ${knesset25Statuses.length} statuses that appear in Knesset 25');
       
       // Group by description (Desc field) - treat statuses with same name as one
       final Map<String, List<int>> statusesByDesc = {};
@@ -52,8 +68,14 @@ class ThreadListScreen extends StatelessWidget {
       // Sort by description
       uniqueStatuses.sort((a, b) => (a['Desc'] as String).compareTo(b['Desc'] as String));
       
+      appLogger.i('🟡 ThreadListScreen: Returning ${uniqueStatuses.length} unique statuses for dropdown');
+      if (uniqueStatuses.isNotEmpty) {
+        appLogger.i('🟡 ThreadListScreen: First 3 unique statuses: ${uniqueStatuses.take(3).map((s) => '${s['Desc']} (${(s['StatusIDs'] as List<dynamic>?)?.join(", ") ?? "N/A"})').join(", ")}');
+      }
+      
       return uniqueStatuses;
-    } catch (e) {
+    } catch (e, s) {
+      appLogger.e('🟡 ThreadListScreen: ERROR in _getKnesset25Statuses', error: e, stackTrace: s);
       return [];
     }
   }

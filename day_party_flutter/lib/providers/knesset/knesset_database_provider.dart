@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../services/knesset/knesset_api_service.dart';
 import '../../models/knesset/knesset_bill.dart';
 import '../../models/knesset/knesset_document_bill.dart';
+import '../../core/logger.dart';
 
 /// Provider for Knesset API service (replaces SQLite database service)
 class KnessetDatabaseProvider with ChangeNotifier {
@@ -55,7 +56,13 @@ class KnessetDatabaseProvider with ChangeNotifier {
 
   /// Get all statuses
   Future<List<Map<String, dynamic>>> getAllStatuses() async {
-    return await _service.getAllStatuses();
+    appLogger.i('🟣 KnessetDatabaseProvider: getAllStatuses called');
+    final statuses = await _service.getAllStatuses();
+    appLogger.i('🟣 KnessetDatabaseProvider: Received ${statuses.length} statuses from service');
+    if (statuses.isEmpty) {
+      appLogger.w('🟣 KnessetDatabaseProvider: WARNING - No statuses returned from service!');
+    }
+    return statuses;
   }
 
   /// Get bills filtered by Knesset number and optionally by StatusID

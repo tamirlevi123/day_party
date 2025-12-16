@@ -92,6 +92,13 @@ class KnessetDatabaseService {
             appLogger.i('KnessetDatabaseService: Database copied from assets and reopened');
           }
           
+          // Log database statistics for debugging
+          try {
+            await _logDatabaseStatistics();
+          } catch (e) {
+            appLogger.w('KnessetDatabaseService: Could not log database statistics', error: e);
+          }
+          
           // Now check for incremental updates (database must be open to query max IDs)
           try {
             final needsUpdate = await _checkForUpdate();
@@ -101,6 +108,12 @@ class KnessetDatabaseService {
                 // Use incremental updates instead of full download
                 await _applyIncrementalUpdates();
                 appLogger.i('KnessetDatabaseService: Database updated incrementally from server successfully');
+                // Log statistics again after update
+                try {
+                  await _logDatabaseStatistics();
+                } catch (e) {
+                  appLogger.w('KnessetDatabaseService: Could not log database statistics after update', error: e);
+                }
               } catch (updateError) {
                 appLogger.w('KnessetDatabaseService: Incremental update failed, using existing database', error: updateError);
                 // Continue with existing database if update fails
@@ -625,6 +638,49 @@ class KnessetDatabaseService {
     } catch (e, s) {
       appLogger.e('KnessetDatabaseService: Error updating database incrementally', error: e, stackTrace: s);
       rethrow;
+    }
+  }
+
+  /// Log database statistics for debugging (compare between devices)
+  Future<void> _logDatabaseStatistics() async {
+    if (_database == null) return;
+    
+    try {
+      // Count rows in key tables
+      final statusCount = await _database!.rawQuery('SELECT COUNT(*) as count FROM _KNS_Status');
+      final billCount = await _database!.rawQuery('SELECT COUNT(*) as count FROM _KNS_Bill');
+      final knesset25BillCount = await _database!.rawQuery(
+        'SELECT COUNT(*) as count FROM _KNS_Bill WHERE KnessetNum = 25'
+      );
+      final status114Exists = await _database!.rawQuery(
+        'SELECT COUNT(*) as count FROM _KNS_Status WHERE StatusID = 114'
+      );
+      final status114Desc = await _database!.rawQuery(
+        'SELECT Desc FROM _KNS_Status WHERE StatusID = 114 LIMIT 1'
+      );
+      
+      final statusCountNum = statusCount.first['count'] as int? ?? 0;
+      final billCountNum = billCount.first['count'] as int? ?? 0;
+      final knesset25CountNum = knesset25BillCount.first['count'] as int? ?? 0;
+      final status114ExistsNum = status114Exists.first['count'] as int? ?? 0;
+      final status114DescText = status114Desc.isNotEmpty 
+        ? status114Desc.first['Desc']?.toString() 
+        : null;
+      
+      appLogger.i('═══════════════════════════════════════════════════════════');
+      appLogger.i('📊 SQLite Database Statistics:');
+      appLogger.i('   Total Statuses: $statusCountNum');
+      appLogger.i('   Total Bills: $billCountNum');
+      appLogger.i('   Knesset 25 Bills: $knesset25CountNum');
+      appLogger.i('   Status 114 exists: ${status114ExistsNum > 0}');
+      if (status114DescText != null) {
+        appLogger.i('   Status 114 description: "$status114DescText"');
+      } else {
+        appLogger.w('   Status 114 description: NOT FOUND');
+      }
+      appLogger.i('═══════════════════════════════════════════════════════════');
+    } catch (e, s) {
+      appLogger.e('KnessetDatabaseService: Error logging database statistics', error: e, stackTrace: s);
     }
   }
 

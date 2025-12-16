@@ -9,6 +9,9 @@ const prisma = new PrismaClient();
  */
 export const getStatuses = async (_req: Request, res: Response): Promise<Response | void> => {
   try {
+    console.log('[KnessetController] getStatuses called');
+    console.log('[SQL] Querying _KNS_Status table...');
+    
     const statuses = await prisma.$queryRawUnsafe<Array<{
       StatusID: number;
       Desc: string;
@@ -20,16 +23,29 @@ export const getStatuses = async (_req: Request, res: Response): Promise<Respons
       ORDER BY TypeID, \`Desc\`
     `);
 
-    return res.status(200).json({
-      statuses: statuses.map(s => ({
+    console.log(`[SQL] Found ${statuses.length} statuses`);
+    if (statuses.length > 0) {
+      console.log(`[KnessetController] First 5 statuses:`, statuses.slice(0, 5).map(s => ({
         StatusID: s.StatusID,
         Desc: s.Desc,
-        TypeID: s.TypeID,
-        TypeDesc: s.TypeDesc,
-      })),
+      })));
+    }
+
+    const formattedStatuses = statuses.map(s => ({
+      StatusID: s.StatusID,
+      Desc: s.Desc,
+      TypeID: s.TypeID,
+      TypeDesc: s.TypeDesc,
+    }));
+
+    console.log(`[KnessetController] Returning ${formattedStatuses.length} statuses to client`);
+
+    return res.status(200).json({
+      statuses: formattedStatuses,
     });
   } catch (error: any) {
-    console.error('Error fetching statuses:', error);
+    console.error('[KnessetController] Error fetching statuses:', error);
+    console.error('[KnessetController] Error stack:', error.stack);
     return res.status(500).json({
       error: 'internal_error',
       message: 'Failed to fetch statuses',
