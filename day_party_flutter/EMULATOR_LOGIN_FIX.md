@@ -57,10 +57,16 @@ You should see the backend listening on port 3000.
 
 ## If Port Forwarding Doesn't Work
 
-### Option 1: Re-run Port Forwarding Script
+### Option 1: Re-run Port Forwarding Script (Recommended)
+```cmd
+cd day_party_flutter
+setup-port-forwarding.cmd
+```
+
+**Alternative PowerShell version** (may require execution policy bypass):
 ```powershell
 cd day_party_flutter
-.\setup-port-forwarding.ps1
+powershell -ExecutionPolicy Bypass -File .\setup-port-forwarding.ps1
 ```
 
 ### Option 2: Manual ADB Command

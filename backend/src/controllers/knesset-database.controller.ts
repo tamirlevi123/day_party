@@ -63,7 +63,10 @@ export const getDatabaseInfo = async (_req: Request, res: Response): Promise<voi
  */
 export const downloadDatabase = async (_req: Request, res: Response): Promise<void> => {
   try {
+    console.log(`[KnessetDatabase] Download requested. Checking path: ${KNESSET_DB_PATH}`);
+    
     if (!fs.existsSync(KNESSET_DB_PATH)) {
+      console.error(`[KnessetDatabase] Database file not found at: ${KNESSET_DB_PATH}`);
       res.status(404).json({
         message: `Database file not found at: ${KNESSET_DB_PATH}`,
       });
@@ -72,19 +75,28 @@ export const downloadDatabase = async (_req: Request, res: Response): Promise<vo
 
     const filename = path.basename(KNESSET_DB_PATH);
     const stats = fs.statSync(KNESSET_DB_PATH);
+    console.log(`[KnessetDatabase] File found. Size: ${stats.size} bytes`);
 
     // Set headers for file download
     res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.setHeader('Content-Length', stats.size.toString());
     res.setHeader('Cache-Control', 'no-cache');
+    console.log(`[KnessetDatabase] Headers set. Starting file stream...`);
 
     // Stream the file
     const fileStream = fs.createReadStream(KNESSET_DB_PATH);
-    fileStream.pipe(res);
-
+    
+    fileStream.on('open', () => {
+      console.log(`[KnessetDatabase] File stream opened`);
+    });
+    
+    fileStream.on('end', () => {
+      console.log(`[KnessetDatabase] File stream ended successfully`);
+    });
+    
     fileStream.on('error', (error) => {
-      console.error('Error streaming database file:', error);
+      console.error(`[KnessetDatabase] Error streaming database file:`, error);
       if (!res.headersSent) {
         res.status(500).json({
           message: 'Internal server error during database download',
@@ -92,14 +104,129 @@ export const downloadDatabase = async (_req: Request, res: Response): Promise<vo
         });
       }
     });
+    
+    res.on('finish', () => {
+      console.log(`[KnessetDatabase] Response finished`);
+    });
+    
+    res.on('close', () => {
+      console.log(`[KnessetDatabase] Response closed`);
+    });
+
+    fileStream.pipe(res);
   } catch (error: any) {
-    console.error('Error downloading database file:', error);
+    console.error(`[KnessetDatabase] Error downloading database file:`, error);
     if (!res.headersSent) {
       res.status(500).json({
         message: 'Internal server error during database download',
         error: error.message,
       });
     }
+  }
+};
+
+/**
+ * Map table names to their primary key column names
+ */
+const TABLE_PRIMARY_KEYS: Record<string, string> = {
+  '_KNS_Bill': 'BillID',
+  '_KNS_DocumentBill': 'DocumentBillID',
+  '_KNS_Committee': 'CommitteeID',
+  '_KNS_Person': 'PersonID',
+  '_KNS_CommitteeSession': 'CommitteeSessionID',
+  '_KNS_Faction': 'FactionID',
+  '_KNS_Status': 'StatusID',
+};
+
+/**
+ * GET /api/knesset-database/updates/:tableName
+ * Returns records from a table where primary key > maxId
+ * Query params: maxId (required)
+ */
+export const getTableUpdates = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const tableName = req.params.tableName;
+    const maxIdParam = req.query.maxId as string;
+
+    if (!tableName) {
+      res.status(400).json({
+        message: 'Table name is required',
+      });
+      return;
+    }
+
+    if (!maxIdParam) {
+      res.status(400).json({
+        message: 'maxId query parameter is required',
+      });
+      return;
+    }
+
+    const primaryKey = TABLE_PRIMARY_KEYS[tableName];
+    if (!primaryKey) {
+      res.status(400).json({
+        message: `Unknown table: ${tableName}. Supported tables: ${Object.keys(TABLE_PRIMARY_KEYS).join(', ')}`,
+      });
+      return;
+    }
+
+    // Parse maxId - handle both integer and string (for DocumentBillID which is TEXT)
+    let maxId: number | string;
+    if (primaryKey === 'DocumentBillID') {
+      // DocumentBillID is stored as TEXT, so keep as string
+      maxId = maxIdParam;
+    } else {
+      maxId = parseInt(maxIdParam, 10);
+      if (isNaN(maxId)) {
+        res.status(400).json({
+          message: `Invalid maxId for table ${tableName}: must be a number`,
+        });
+        return;
+      }
+    }
+
+    const db = getDatabase();
+    if (!db) {
+      res.status(404).json({
+        message: 'Knesset database not available',
+      });
+      return;
+    }
+
+    try {
+      // Build query: SELECT * FROM table WHERE primaryKey > maxId ORDER BY primaryKey ASC LIMIT 1000
+      // Using LIMIT to prevent huge responses
+      const query = `
+        SELECT * 
+        FROM ${tableName}
+        WHERE ${primaryKey} > ?
+        ORDER BY ${primaryKey} ASC
+        LIMIT 1000
+      `;
+
+      console.log(`[KnessetDatabase] Querying ${tableName} for records where ${primaryKey} > ${maxId}`);
+      
+      const records = db.prepare(query).all(maxId) as Array<Record<string, any>>;
+
+      console.log(`[KnessetDatabase] Found ${records.length} records in ${tableName} where ${primaryKey} > ${maxId}`);
+
+      res.json({
+        tableName: tableName,
+        primaryKey: primaryKey,
+        maxId: maxId,
+        records: records,
+        count: records.length,
+        hasMore: records.length === 1000, // If we got exactly 1000, there might be more
+      });
+    } finally {
+      db.close();
+    }
+  } catch (error: any) {
+    console.error('Error querying table updates:', error);
+    res.status(500).json({
+      message: 'Internal server error while retrieving table updates',
+      error: error.message,
+    });
   }
 };
 

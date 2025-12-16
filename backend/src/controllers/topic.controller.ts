@@ -101,6 +101,11 @@ export const getTopic = async (req: Request, res: Response): Promise<Response | 
 export const getTopicThreads = async (req: Request, res: Response): Promise<Response | void> => {
   try {
     const { topicId } = req.params;
+    // Support both single statusID and comma-separated list of statusIDs
+    const statusIDParam = req.query.statusID as string | undefined;
+    const statusIDs = statusIDParam 
+      ? statusIDParam.split(',').map(id => parseInt(id.trim(), 10)).filter(id => !isNaN(id))
+      : undefined;
 
     // Verify topic exists
     const topic = await prisma.topic.findUnique({
@@ -126,22 +131,47 @@ export const getTopicThreads = async (req: Request, res: Response): Promise<Resp
             nodes: true,
           },
         },
+        nodes: {
+          where: {
+            parentNodeId: null, // Root nodes only
+          },
+          select: {
+            metadataJson: true,
+          },
+          take: 1, // Just need the root node metadata
+        },
       },
       orderBy: {
         createdAt: 'desc',
       },
     });
 
-    // Format response
-    const formattedThreads = threads.map((thread) => ({
-      threadId: thread.id,
-      topicId: thread.topicId,
-      title: thread.title,
-      description: thread.description,
-      status: thread.status,
-      nodeCount: thread._count.nodes,
-      createdAt: thread.createdAt.toISOString(),
-    }));
+    // Format response and filter by statusID if provided
+    let formattedThreads = threads.map((thread) => {
+      const rootNode = thread.nodes[0];
+      const metadata = rootNode?.metadataJson as Record<string, any> | null;
+      const billStatusID = metadata?.statusID as number | undefined;
+
+      return {
+        threadId: thread.id,
+        topicId: thread.topicId,
+        title: thread.title,
+        description: thread.description,
+        status: thread.status,
+        nodeCount: thread._count.nodes,
+        createdAt: thread.createdAt.toISOString(),
+        metadata: metadata || null, // Include root node metadata
+      };
+    });
+
+    // Filter by statusIDs if provided (match any of the provided statusIDs)
+    if (statusIDs !== undefined && statusIDs.length > 0) {
+      formattedThreads = formattedThreads.filter((thread) => {
+        const metadata = thread.metadata as Record<string, any> | null;
+        const billStatusID = metadata?.statusID as number | undefined;
+        return billStatusID !== undefined && statusIDs.includes(billStatusID);
+      });
+    }
 
     return res.status(200).json({
       threads: formattedThreads,

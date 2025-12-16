@@ -18,6 +18,7 @@ router.use('/threads', threadRoutes);
 router.use('/videos', videoRoutes);
 router.use('/admin', adminRoutes);
 router.use('/knesset-database', knessetDatabaseRoutes);
+console.log('[Routes] Knesset database routes registered at /api/knesset-database');
 
 export default router;
 

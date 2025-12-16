@@ -37,6 +37,7 @@ class ThreadSummary {
   final String status;
   final int nodeCount;
   final String createdAt;
+  final Map<String, dynamic>? metadata; // Root node metadata (for bill info)
 
   ThreadSummary({
     required this.threadId,
@@ -46,6 +47,7 @@ class ThreadSummary {
     required this.status,
     required this.nodeCount,
     required this.createdAt,
+    this.metadata,
   });
 
   factory ThreadSummary.fromJson(Map<String, dynamic> json) {
@@ -57,7 +59,28 @@ class ThreadSummary {
       status: json['status'],
       nodeCount: json['nodeCount'],
       createdAt: json['createdAt'],
+      metadata: json['metadata'] != null 
+        ? Map<String, dynamic>.from(json['metadata'])
+        : null,
     );
+  }
+
+  /// Get bill StatusID from metadata
+  int? get billStatusID {
+    if (metadata == null) return null;
+    final statusID = metadata!['statusID'];
+    if (statusID is int) return statusID;
+    if (statusID is String) return int.tryParse(statusID);
+    return null;
+  }
+
+  /// Get bill ID from metadata
+  int? get billId {
+    if (metadata == null) return null;
+    final billId = metadata!['billId'];
+    if (billId is int) return billId;
+    if (billId is String) return int.tryParse(billId);
+    return null;
   }
 }
 

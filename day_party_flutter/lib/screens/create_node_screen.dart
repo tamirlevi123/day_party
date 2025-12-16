@@ -242,6 +242,27 @@ class _CreateNodeScreenState extends State<CreateNodeScreen> {
         debugPrint('Error getting Delta from editor: $e');
       }
     }
+    
+    // Ensure deltaContent is always a JSON string (not a parsed object)
+    // This handles cases where deltaContent might be a parsed object
+    if (deltaContent.isNotEmpty) {
+      try {
+        // If it's already a string, try to parse and re-encode to ensure it's valid JSON
+        final parsed = jsonDecode(deltaContent);
+        // Re-encode to ensure it's a proper JSON string
+        deltaContent = jsonEncode(parsed);
+      } catch (e) {
+        // If parsing fails, it might already be a string, try to validate it
+        try {
+          jsonDecode(deltaContent); // Validate it's valid JSON
+        } catch (e2) {
+          debugPrint('Invalid Delta JSON format: $e2');
+          _showError('שגיאה בפורמט התוכן. אנא נסה שוב.');
+          return;
+        }
+      }
+    }
+    
     final hasText = deltaContent.isNotEmpty && deltaContent != '{"ops":[{"insert":"\\n"}]}';
     final hasMedia = _selectedVideoFile != null || _linkPreview != null;
 
@@ -254,14 +275,24 @@ class _CreateNodeScreenState extends State<CreateNodeScreen> {
     if (hasText) {
       try {
         final deltaJson = jsonDecode(deltaContent);
-        final plainText = _extractPlainTextFromDelta(deltaJson);
+        // Handle both formats: {"ops": [...]} or just [...]
+        Map<String, dynamic> deltaMap;
+        if (deltaJson is Map<String, dynamic>) {
+          deltaMap = deltaJson;
+        } else if (deltaJson is List) {
+          deltaMap = {'ops': deltaJson};
+        } else {
+          throw FormatException('Invalid Delta format');
+        }
+        final plainText = _extractPlainTextFromDelta(deltaMap);
         if (plainText.trim().length < 10) {
           _showError('תוכן חייב להיות לפחות 10 תווים');
           return;
         }
       } catch (e) {
         debugPrint('Error validating Delta content: $e');
-        // Continue anyway
+        _showError('שגיאה בוולידציה של התוכן. אנא נסה שוב.');
+        return;
       }
     }
 

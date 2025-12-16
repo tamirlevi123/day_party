@@ -66,9 +66,13 @@ adb -s emulator-5554 shell getprop ro.product.model
 # This creates a TCP tunnel that allows Google OAuth redirects to work in emulator
 # See EMULATOR_SETUP.md in project root for complete documentation
 
-# Option 1: Use the helper script (recommended)
+# Option 1: Use the helper script (recommended: use .cmd version to bypass PowerShell execution policy)
 cd day_party_flutter
-.\setup-port-forwarding.ps1
+setup-port-forwarding.cmd
+
+# Alternative: PowerShell version (may require execution policy bypass)
+cd day_party_flutter
+powershell -ExecutionPolicy Bypass -File .\setup-port-forwarding.ps1
 
 # Option 2: Run ADB directly (if ADB is in PATH)
 adb reverse tcp:3000 tcp:3000

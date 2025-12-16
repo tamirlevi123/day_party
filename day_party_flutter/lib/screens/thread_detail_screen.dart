@@ -592,11 +592,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
 																	},
 																),
 																const SizedBox(height: 16),
-																// Show Knesset documents if this is the root node (after voting icons)
-																if (selectedNode.parentNodeId == null && _selectedNodeId == null) ...[
-																	_buildKnessetDocuments(data.thread, selectedNode),
-																],
-																// Reply button - hide for memes
+																// Reply button - hide for memes (moved above docs)
 																Consumer<MemesProvider>(
 																	builder: (context, memesProvider, _) {
 																		if (memesProvider.isMemesTopic(data.thread.topicId)) {
@@ -604,7 +600,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
 																			return const SizedBox.shrink();
 																		}
 																		return Padding(
-																			padding: const EdgeInsets.only(top: 16),
+																			padding: const EdgeInsets.only(bottom: 16),
 																			child: Row(
 																				mainAxisAlignment: MainAxisAlignment.spaceBetween,
 																				children: [
@@ -675,6 +671,10 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
 																		);
 																	},
 																),
+																// Show Knesset documents if this is the root node (after response button)
+																if (selectedNode.parentNodeId == null && _selectedNodeId == null) ...[
+																	_buildKnessetDocuments(data.thread, selectedNode),
+																],
 															],
 														),
 													),

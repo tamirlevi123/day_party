@@ -3,6 +3,7 @@ import axios from 'axios';
 import { findOrCreateUserFromOAuth, generateTokensForUser, logoutUser, OAuthUserInfo } from '../services/auth.service';
 import { Provider } from '@prisma/client';
 import { verifyToken } from '../utils/jwt.util';
+import { prisma } from '../server';
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
@@ -371,6 +372,58 @@ export const logout = async (req: Request, res: Response): Promise<Response | vo
     return res.status(500).json({
       error: 'internal_server_error',
       message: error.message || 'Failed to logout',
+    });
+  }
+};
+
+/**
+ * POST /auth/refresh
+ * Refreshes access token using refresh token
+ */
+export const refreshToken = async (req: Request, res: Response): Promise<Response | void> => {
+  try {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+      return res.status(400).json({
+        error: 'validation_error',
+        message: 'refreshToken is required',
+      });
+    }
+
+    // Verify refresh token
+    const payload = verifyToken(refreshToken);
+
+    // Verify user still exists and is active
+    const user = await prisma.user.findUnique({
+      where: { id: payload.userId },
+      select: { id: true, role: true, isActive: true },
+    });
+
+    if (!user || !user.isActive) {
+      return res.status(401).json({
+        error: 'unauthorized',
+        message: 'User not found or inactive',
+      });
+    }
+
+    // Generate new access token
+    const { token } = generateTokensForUser(user.id, user.role);
+
+    return res.status(200).json({
+      token,
+    });
+  } catch (error: any) {
+    if (error.message === 'Invalid or expired token') {
+      return res.status(401).json({
+        error: 'unauthorized',
+        message: 'Invalid or expired refresh token',
+      });
+    }
+
+    return res.status(500).json({
+      error: 'internal_server_error',
+      message: error.message || 'Failed to refresh token',
     });
   }
 };

@@ -30,9 +30,22 @@ This creates a tunnel that forwards any connection to `localhost:3000` in the em
 
 ### Option 1: Use the Setup Script (Recommended)
 
+**Recommended: Use the .cmd version** (bypasses PowerShell execution policy):
+```cmd
+cd day_party_flutter
+setup-port-forwarding.cmd
+```
+
+**Alternative: PowerShell version** (may require execution policy bypass):
 ```powershell
 cd day_party_flutter
 .\setup-port-forwarding.ps1
+```
+
+Or with execution policy bypass:
+```powershell
+cd day_party_flutter
+powershell -ExecutionPolicy Bypass -File .\setup-port-forwarding.ps1
 ```
 
 This script will:
@@ -106,9 +119,9 @@ If this works, port forwarding is configured correctly!
 **CRITICAL**: Port forwarding is **NOT persistent**. Every time you restart the Android emulator, you must set up port forwarding again.
 
 **Solution**: Re-run the setup script or ADB command after each emulator restart:
-```powershell
+```cmd
 cd day_party_flutter
-.\setup-port-forwarding.ps1
+setup-port-forwarding.cmd
 ```
 
 ### Backend Must Be Running
@@ -190,16 +203,16 @@ This means port forwarding is not active or backend is not running.
 
 **Solution**:
 1. Verify backend is running: `netstat -ano | findstr :3000`
-2. Set up port forwarding: `.\setup-port-forwarding.ps1`
+2. Set up port forwarding: `setup-port-forwarding.cmd`
 3. Test from emulator browser: `http://localhost:3000/health`
 4. Try OAuth login again
 
 ## Quick Reference
 
 ### Setup Port Forwarding
-```powershell
+```cmd
 cd day_party_flutter
-.\setup-port-forwarding.ps1
+setup-port-forwarding.cmd
 ```
 
 ### Verify Port Forwarding
@@ -220,7 +233,8 @@ Open browser in emulator → `http://localhost:3000/health`
 - `day_party_flutter/EMULATOR_LOGIN_FIX.md` - Detailed OAuth login troubleshooting
 - `day_party_flutter/TROUBLESHOOTING.md` - General connection troubleshooting
 - `QUICK_FIX_SUMMARY.md` - Quick reference for emulator login issues
-- `day_party_flutter/setup-port-forwarding.ps1` - Port forwarding setup script
+- `day_party_flutter/setup-port-forwarding.cmd` - Port forwarding setup script (recommended, bypasses PowerShell execution policy)
+- `day_party_flutter/setup-port-forwarding.ps1` - PowerShell version of port forwarding script
 
 ## Summary
 
@@ -228,7 +242,7 @@ Open browser in emulator → `http://localhost:3000/health`
 
 1. ✅ Start backend: `cd backend ; npm run dev`
 2. ✅ Start Android emulator
-3. ✅ **Set up port forwarding**: `cd day_party_flutter ; .\setup-port-forwarding.ps1`
+3. ✅ **Set up port forwarding**: `cd day_party_flutter ; setup-port-forwarding.cmd`
 4. ✅ Verify: Test `http://localhost:3000/health` in emulator browser
 5. ✅ Run Flutter app: `flutter run`
 

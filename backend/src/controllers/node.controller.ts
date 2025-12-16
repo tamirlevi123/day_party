@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { Prisma, PrismaClient, ContentStatus, VideoSource, VideoProvider } from '@prisma/client';
 import { getVideoPreview } from '../services/video-link.service';
 import { transformNodeToResponse } from '../utils/node-response.util';
+import { AuthRequest } from '../middleware/auth.middleware';
 
 const prisma = new PrismaClient();
 
@@ -153,6 +154,14 @@ export const getNode = async (req: Request, res: Response): Promise<Response | v
 
 export const createNode = async (req: Request, res: Response): Promise<Response | void> => {
   try {
+    const authReq = req as AuthRequest;
+    if (!authReq.user) {
+      return res.status(401).json({
+        error: 'unauthorized',
+        message: 'Authentication required',
+      });
+    }
+
     const { threadId, parentNodeId, parentRelation, title, textContent, textFormat, videoUrl, isAnonymous } = req.body;
     const videoPayloadRaw = req.body.video;
 
@@ -202,10 +211,28 @@ export const createNode = async (req: Request, res: Response): Promise<Response 
       }
     } else if (textContent) {
       // Auto-detect Delta JSON format
+      // Handle case where textContent might be a string or already parsed object
       try {
-        const parsed = JSON.parse(textContent);
-        if (parsed && typeof parsed === 'object' && Array.isArray(parsed.ops)) {
-          detectedTextFormat = 'delta';
+        let parsed: any;
+        if (typeof textContent === 'string') {
+          parsed = JSON.parse(textContent);
+        } else if (typeof textContent === 'object') {
+          // Already parsed (shouldn't happen but handle gracefully)
+          parsed = textContent;
+        } else {
+          // Not a valid type, keep default 'plain'
+          parsed = null;
+        }
+        
+        if (parsed && typeof parsed === 'object') {
+          // Check if it's Delta format: has 'ops' array
+          if (Array.isArray(parsed.ops) || Array.isArray(parsed)) {
+            detectedTextFormat = 'delta';
+            // If textContent was an object, convert it to string for storage
+            if (typeof textContent !== 'string') {
+              textContent = JSON.stringify(parsed);
+            }
+          }
         }
       } catch {
         // Not JSON, keep default 'plain'
@@ -221,6 +248,7 @@ export const createNode = async (req: Request, res: Response): Promise<Response 
         textContent: textContent || null,
         textFormat: detectedTextFormat,
         isAnonymous: isAnonymous || false,
+        authorId: isAnonymous ? null : authReq.user.id,
         ...(videoData ?? EMPTY_VIDEO_DATA),
       },
       include: {

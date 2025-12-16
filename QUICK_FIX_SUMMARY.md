@@ -54,10 +54,15 @@ This creates a TCP tunnel that forwards the emulator's `localhost:3000` to your 
 ## 📝 Important Notes
 
 - **Port forwarding resets** when you restart the emulator - you'll need to run the setup again
-- To re-setup port forwarding:
+- To re-setup port forwarding (recommended: use .cmd version):
+  ```cmd
+  cd day_party_flutter
+  setup-port-forwarding.cmd
+  ```
+  Or PowerShell version:
   ```powershell
   cd day_party_flutter
-  .\setup-port-forwarding.ps1
+  powershell -ExecutionPolicy Bypass -File .\setup-port-forwarding.ps1
   ```
   Or manually:
   ```powershell
@@ -79,6 +84,7 @@ This creates a TCP tunnel that forwards the emulator's `localhost:3000` to your 
 ## 📚 Related Files
 
 - `day_party_flutter/EMULATOR_LOGIN_FIX.md` - Detailed troubleshooting guide
-- `day_party_flutter/setup-port-forwarding.ps1` - Port forwarding script
+- `day_party_flutter/setup-port-forwarding.cmd` - Port forwarding script (recommended, bypasses PowerShell execution policy)
+- `day_party_flutter/setup-port-forwarding.ps1` - PowerShell version of port forwarding script
 - `backend/src/controllers/auth.controller.ts` - OAuth callback handler
 

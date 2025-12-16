@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../services/knesset/knesset_database_service.dart';
 
 class UserProfileAction extends StatelessWidget {
   const UserProfileAction({super.key});
@@ -71,6 +72,53 @@ class UserProfileAction extends StatelessWidget {
                   Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
                 }
               }
+            } else if (value == 'update_db') {
+              // Show loading dialog
+              if (!context.mounted) return;
+              
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (context) => const AlertDialog(
+                  content: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(width: 16),
+                      Text('מעדכן את מסד הנתונים...'),
+                    ],
+                  ),
+                ),
+              );
+
+              try {
+                final dbService = KnessetDatabaseService();
+                final success = await dbService.updateDatabase();
+                
+                if (!context.mounted) return;
+                Navigator.of(context).pop(); // Close loading dialog
+                
+                if (success) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('מסד הנתונים עודכן בהצלחה'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                } else {
+                  throw Exception('Update failed');
+                }
+              } catch (e) {
+                if (!context.mounted) return;
+                Navigator.of(context).pop(); // Close loading dialog
+                
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('שגיאה בעדכון מסד הנתונים: ${e.toString()}'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
             }
           },
           itemBuilder: (context) => [
@@ -81,6 +129,16 @@ class UserProfileAction extends StatelessWidget {
                   Icon(Icons.logout, color: Colors.red),
                   SizedBox(width: 8),
                   Text('התנתק', style: TextStyle(color: Colors.red)),
+                ],
+              ),
+            ),
+            PopupMenuItem<String>(
+              value: 'update_db',
+              child: const Row(
+                children: [
+                  Icon(Icons.update, color: Colors.blue),
+                  SizedBox(width: 8),
+                  Text('עדכן מסד נתונים'),
                 ],
               ),
             ),

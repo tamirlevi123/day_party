@@ -6,11 +6,18 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'logger.dart';
 
+class _PendingRequest {
+  final RequestOptions options;
+  final ErrorInterceptorHandler handler;
+  
+  _PendingRequest(this.options, this.handler);
+}
+
 // HTTP client for Day Party backend
 // Automatically detects emulator vs physical device and sets baseUrl accordingly
 class ApiClient {
   // Backend endpoints
-  static const String _azureVmBaseUrl = 'https://dayparty.work.gd/api';
+  static const String _azureVmBaseUrl = 'http://172.167.43.172/api';
   static const String _androidEmulatorBaseUrl = 'http://10.0.2.2:3000/api';
   
   // Allow insecure SSL certificates for development (self-signed certs)
@@ -76,11 +83,15 @@ class ApiClient {
   }
 
   static const String _tokenKey = 'jwt_token';
+  static const String _refreshTokenKey = 'refresh_token';
   static final FlutterSecureStorage _storage = const FlutterSecureStorage(
     aOptions: AndroidOptions(
       encryptedSharedPreferences: true,
     ),
   );
+  
+  static bool _isRefreshing = false;
+  static final List<_PendingRequest> _pendingRequests = [];
 
   static Dio? _dio;
 
@@ -163,14 +174,88 @@ class ApiClient {
         return handler.next(options);
       },
       onError: (error, handler) async {
-        // Handle 401 Unauthorized - token expired
-        if (error.response?.statusCode == 401) {
+        // Handle 401 Unauthorized - try to refresh token
+        if (error.response?.statusCode == 401 && error.requestOptions.path != '/auth/refresh') {
+          appLogger.d('Received 401 Unauthorized, attempting token refresh');
           try {
-            // Clear token and redirect to login
-            await _storage.delete(key: _tokenKey);
-            // You might want to emit an event here to notify the app
+            final refreshToken = await _storage.read(key: _refreshTokenKey);
+            
+            if (refreshToken != null && refreshToken.isNotEmpty) {
+              // If already refreshing, queue this request
+              if (_isRefreshing) {
+                appLogger.d('Token refresh already in progress, queueing request');
+                _pendingRequests.add(_PendingRequest(error.requestOptions, handler));
+                return;
+              }
+              
+              _isRefreshing = true;
+              appLogger.d('Starting token refresh');
+              
+              try {
+                // Attempt to refresh the token
+                final refreshResponse = await _dio!.post(
+                  '/auth/refresh',
+                  data: {'refreshToken': refreshToken},
+                );
+                
+                final newToken = refreshResponse.data['token'] as String;
+                if (newToken.isEmpty) {
+                  throw Exception('Received empty token from refresh endpoint');
+                }
+                
+                await _storage.write(key: _tokenKey, value: newToken);
+                appLogger.d('Token refreshed successfully');
+                
+                // Update the failed request with new token
+                error.requestOptions.headers['Authorization'] = 'Bearer $newToken';
+                
+                // Retry the original request
+                final opts = error.requestOptions;
+                final response = await _dio!.fetch(opts);
+                
+                // Process pending requests
+                for (final pending in _pendingRequests) {
+                  pending.options.headers['Authorization'] = 'Bearer $newToken';
+                  try {
+                    final retryResponse = await _dio!.fetch(pending.options);
+                    pending.handler.resolve(retryResponse);
+                  } catch (e) {
+                    pending.handler.reject(DioException(
+                      requestOptions: pending.options,
+                      error: e,
+                    ));
+                  }
+                }
+                _pendingRequests.clear();
+                
+                _isRefreshing = false;
+                return handler.resolve(response);
+              } catch (refreshError) {
+                _isRefreshing = false;
+                appLogger.w('Token refresh failed', error: refreshError);
+                // Refresh failed - clear tokens and let the error propagate
+                await _storage.delete(key: _tokenKey);
+                await _storage.delete(key: _refreshTokenKey);
+                
+                // Reject pending requests
+                for (final pending in _pendingRequests) {
+                  pending.handler.reject(DioException(
+                    requestOptions: pending.options,
+                    error: refreshError,
+                  ));
+                }
+                _pendingRequests.clear();
+                
+                // Return the original error, not the refresh error
+                return handler.next(error);
+              }
+            } else {
+              appLogger.w('No refresh token available, clearing access token');
+              // No refresh token - clear access token
+              await _storage.delete(key: _tokenKey);
+            }
           } catch (e) {
-            appLogger.w('Error deleting token', error: e);
+            appLogger.w('Error handling 401', error: e);
           }
         }
         return handler.next(error);

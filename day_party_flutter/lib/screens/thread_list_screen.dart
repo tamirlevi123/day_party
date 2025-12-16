@@ -338,39 +338,61 @@ class ThreadListScreen extends StatelessWidget {
                                       ),
                                     Padding(
                                       padding: const EdgeInsets.only(top: 4),
-                                      child: Row(
-                                        children: [
-                                          Text(
-                                            '${thread.nodeCount} posts',
-                                            style: const TextStyle(fontSize: 12),
-                                          ),
-                                          if (thread.billStatusID != null)
-                                            FutureBuilder<String?>(
-                                              future: _getStatusDescription(context, thread.billStatusID!),
-                                              builder: (context, snapshot) {
-                                                if (snapshot.hasData && snapshot.data != null) {
-                                                  return Padding(
-                                                    padding: const EdgeInsets.only(right: 8),
-                                                    child: Container(
-                                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                                      decoration: BoxDecoration(
-                                                        color: Theme.of(context).colorScheme.primaryContainer,
-                                                        borderRadius: BorderRadius.circular(4),
-                                                      ),
-                                                      child: Text(
-                                                        snapshot.data!,
-                                                        style: TextStyle(
-                                                          fontSize: 11,
-                                                          color: Theme.of(context).colorScheme.onPrimaryContainer,
-                                                        ),
-                                                      ),
+                                      child: LayoutBuilder(
+                                        builder: (context, constraints) {
+                                          return Wrap(
+                                            spacing: 8,
+                                            runSpacing: 4,
+                                            crossAxisAlignment: WrapCrossAlignment.center,
+                                            children: [
+                                              Text(
+                                                '${thread.nodeCount} posts',
+                                                style: const TextStyle(fontSize: 12),
+                                              ),
+                                              if (thread.billId != null)
+                                                Flexible(
+                                                  child: Text(
+                                                    'Bill ID: ${thread.billId}',
+                                                    style: TextStyle(
+                                                      fontSize: 12,
+                                                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                                                     ),
-                                                  );
-                                                }
-                                                return const SizedBox.shrink();
-                                              },
-                                            ),
-                                        ],
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                              if (thread.billStatusID != null)
+                                                FutureBuilder<String?>(
+                                                  future: _getStatusDescription(context, thread.billStatusID!),
+                                                  builder: (context, snapshot) {
+                                                    if (snapshot.hasData && snapshot.data != null) {
+                                                      return ConstrainedBox(
+                                                        constraints: BoxConstraints(
+                                                          maxWidth: constraints.maxWidth * 0.4,
+                                                        ),
+                                                        child: Container(
+                                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                                          decoration: BoxDecoration(
+                                                            color: Theme.of(context).colorScheme.primaryContainer,
+                                                            borderRadius: BorderRadius.circular(4),
+                                                          ),
+                                                          child: Text(
+                                                            snapshot.data!,
+                                                            style: TextStyle(
+                                                              fontSize: 11,
+                                                              color: Theme.of(context).colorScheme.onPrimaryContainer,
+                                                            ),
+                                                            overflow: TextOverflow.ellipsis,
+                                                            maxLines: 1,
+                                                          ),
+                                                        ),
+                                                      );
+                                                    }
+                                                    return const SizedBox.shrink();
+                                                  },
+                                                ),
+                                            ],
+                                          );
+                                        },
                                       ),
                                     ),
                                   ],

@@ -165,9 +165,16 @@ When generating terminal commands for this project:
 
 **⚠️ IMPORTANT**: When testing on Android emulator, you must set up ADB reverse port forwarding for OAuth to work:
 
+**Recommended: Use .cmd version** (bypasses PowerShell execution policy):
+```cmd
+cd day_party_flutter
+setup-port-forwarding.cmd
+```
+
+**Alternative: PowerShell version** (may require execution policy bypass):
 ```powershell
 cd day_party_flutter
-.\setup-port-forwarding.ps1
+powershell -ExecutionPolicy Bypass -File .\setup-port-forwarding.ps1
 ```
 
 This creates a TCP tunnel: `adb reverse tcp:3000 tcp:3000` to forward `localhost:3000` from the emulator to your host machine.

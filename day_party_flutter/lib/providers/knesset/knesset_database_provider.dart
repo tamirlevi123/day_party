@@ -58,6 +58,36 @@ class KnessetDatabaseProvider with ChangeNotifier {
     return await _service.getAllStatuses();
   }
 
+  /// Get bills filtered by Knesset number and optionally by StatusID
+  Future<List<KnessetBill>> getBillsByKnesset({
+    required int knessetNum,
+    int? statusID,
+  }) async {
+    try {
+      final maps = await _service.getBillsByKnesset(
+        knessetNum: knessetNum,
+        statusID: statusID,
+      );
+      return maps.map((map) => KnessetBill.fromJson(map)).toList()
+        ..sort((a, b) {
+          // Sort by PublicationDate desc, then BillID desc
+          if (a.publicationDate != null && b.publicationDate != null) {
+            return b.publicationDate!.compareTo(a.publicationDate!);
+          }
+          if (a.publicationDate != null) return -1;
+          if (b.publicationDate != null) return 1;
+          return b.billID.compareTo(a.billID);
+        });
+    } catch (e) {
+      return [];
+    }
+  }
+
+  /// Get status description by StatusID
+  Future<String?> getStatusDescription(int statusID) async {
+    return await _service.getStatusDescription(statusID);
+  }
+
   /// Close database connection
   Future<void> close() async {
     await _service.close();

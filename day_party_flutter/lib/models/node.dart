@@ -12,6 +12,7 @@ class Node {
   final VoteTallies voteTallies;
   final String createdAt;
   final String? editedAt;
+  final Map<String, dynamic>? metadata;
 
   Node({
     required this.nodeId,
@@ -27,6 +28,7 @@ class Node {
     required this.voteTallies,
     required this.createdAt,
     this.editedAt,
+    this.metadata,
   });
 
   bool get hasVideo => video != null || legacyVideoUrl != null;
@@ -48,6 +50,9 @@ class Node {
       voteTallies: VoteTallies.fromJson(json['voteTallies']),
       createdAt: json['createdAt'],
       editedAt: json['editedAt'],
+      metadata: json['metadata'] != null 
+        ? Map<String, dynamic>.from(json['metadata'])
+        : null,
     );
   }
 }

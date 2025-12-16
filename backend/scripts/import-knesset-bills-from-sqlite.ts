@@ -1,14 +1,19 @@
 /**
  * Import script for Knesset Bills from SQLite database
  * 
- * This script imports the 100 latest bills from the Knesset SQLite database
+ * This script imports bills from the Knesset SQLite database
  * into Day Party as threads in the "חוקים מהמליאה" topic.
  * 
  * Usage:
+ *   # Import all bills from Knesset 25 (current Knesset):
+ *   tsx scripts/import-knesset-bills-from-sqlite.ts --knesset-num 25
+ * 
+ *   # Import latest 100 bills (any Knesset):
  *   tsx scripts/import-knesset-bills-from-sqlite.ts --limit 100 --dry-run
  * 
  * Arguments:
- *   --limit <number>        Number of latest bills to import (default: 100)
+ *   --limit <number>        Number of latest bills to import (default: 100, ignored if --knesset-num is set)
+ *   --knesset-num <number>   Import all bills for specific Knesset (e.g., 25 for current Knesset)
  *   --topic-name <name>     Topic name (default: "חוקים מהמליאה")
  *   --db-path <path>        Path to SQLite database (default: ../data/knesset_data.db)
  *   --dry-run              Test without importing
@@ -48,6 +53,7 @@ function parseArgs() {
 
 const args = parseArgs();
 const LIMIT = parseInt((args['limit'] as string) || '100', 10);
+const KNESSET_NUM = args['knesset-num'] ? parseInt(args['knesset-num'] as string, 10) : undefined;
 const TOPIC_NAME = (args['topic-name'] as string) || 'חוקים מהמליאה';
 const DB_PATH = (args['db-path'] as string) || path.join(__dirname, '..', 'data', 'knesset_data.db');
 const DRY_RUN = args['dry-run'] === true || process.env.DRY_RUN === 'true';
@@ -122,9 +128,15 @@ async function getOrCreateAdminUser() {
 
 /**
  * Load latest bills from SQLite database
+ * If knessetNum is provided, filters by that Knesset number (e.g., 25 for current Knesset)
  */
-function loadLatestBills(dbPath: string, limit: number): KnessetBill[] {
-  console.log(`📁 Loading latest ${limit} bills from SQLite: ${dbPath}`);
+function loadLatestBills(dbPath: string, limit: number, knessetNum?: number): KnessetBill[] {
+  const knessetFilter = knessetNum ? `AND KnessetNum = ${knessetNum}` : '';
+  const logMessage = knessetNum 
+    ? `📁 Loading all Knesset ${knessetNum} bills from SQLite: ${dbPath}`
+    : `📁 Loading latest ${limit} bills from SQLite: ${dbPath}`;
+  
+  console.log(logMessage);
   
   if (!fs.existsSync(dbPath)) {
     throw new Error(`SQLite database not found: ${dbPath}`);
@@ -133,31 +145,55 @@ function loadLatestBills(dbPath: string, limit: number): KnessetBill[] {
   const db = new Database(dbPath, { readonly: true });
   
   try {
-    // Query latest bills by PublicationDate (or BillID if no date)
-    // Order by PublicationDate DESC, then BillID DESC
-    const query = `
-      SELECT 
-        BillID,
-        KnessetNum,
-        Name,
-        SummaryLaw,
-        PublicationDate,
-        StatusID,
-        CommitteeID,
-        Number,
-        PrivateNumber,
-        SubTypeDesc,
-        LastUpdatedDate
-      FROM _KNS_Bill
-      WHERE Name IS NOT NULL AND Name != ''
-      ORDER BY 
-        CASE WHEN PublicationDate IS NOT NULL AND PublicationDate != '' THEN 0 ELSE 1 END,
-        PublicationDate DESC,
-        BillID DESC
-      LIMIT ?
-    `;
+    // Query bills - if knessetNum is provided, get all bills for that Knesset
+    // Otherwise, limit to latest bills
+    const query = knessetNum
+      ? `
+        SELECT 
+          BillID,
+          KnessetNum,
+          Name,
+          SummaryLaw,
+          PublicationDate,
+          StatusID,
+          CommitteeID,
+          Number,
+          PrivateNumber,
+          SubTypeDesc,
+          LastUpdatedDate
+        FROM _KNS_Bill
+        WHERE Name IS NOT NULL AND Name != ''
+          ${knessetFilter}
+        ORDER BY 
+          CASE WHEN PublicationDate IS NOT NULL AND PublicationDate != '' THEN 0 ELSE 1 END,
+          PublicationDate DESC,
+          BillID DESC
+      `
+      : `
+        SELECT 
+          BillID,
+          KnessetNum,
+          Name,
+          SummaryLaw,
+          PublicationDate,
+          StatusID,
+          CommitteeID,
+          Number,
+          PrivateNumber,
+          SubTypeDesc,
+          LastUpdatedDate
+        FROM _KNS_Bill
+        WHERE Name IS NOT NULL AND Name != ''
+        ORDER BY 
+          CASE WHEN PublicationDate IS NOT NULL AND PublicationDate != '' THEN 0 ELSE 1 END,
+          PublicationDate DESC,
+          BillID DESC
+        LIMIT ?
+      `;
     
-    const bills = db.prepare(query).all(limit) as KnessetBill[];
+    const bills = knessetNum 
+      ? db.prepare(query).all() as KnessetBill[]
+      : db.prepare(query).all(limit) as KnessetBill[];
     
     console.log(`✅ Loaded ${bills.length} bills from SQLite`);
     return bills;
@@ -250,11 +286,12 @@ async function importBill(
         videoStatus: 'missing',
         votingEnabled: true,
         createdAt: createdAt,
-        // Store BillID in metadata for easy lookup
+        // Store BillID and StatusID in metadata for easy lookup and filtering
         metadataJson: {
           billId: bill.BillID,
           knessetNum: bill.KnessetNum,
           billNumber: bill.Number,
+          statusID: bill.StatusID,
         },
       },
     });
@@ -280,8 +317,10 @@ async function importKnessetBills() {
       console.log('🔍 DRY RUN MODE - No data will be imported\n');
     }
 
-    // Load latest bills from SQLite
-    const bills = loadLatestBills(DB_PATH, LIMIT);
+    // Load bills from SQLite
+    // If knesset-num is provided (e.g., 25), load all bills for that Knesset
+    // Otherwise, use limit to get latest bills
+    const bills = loadLatestBills(DB_PATH, LIMIT, KNESSET_NUM);
     
     if (bills.length === 0) {
       console.log('⚠️  No bills found in database');
@@ -362,7 +401,8 @@ Usage:
   tsx scripts/import-knesset-bills-from-sqlite.ts [options]
 
 Options:
-  --limit <number>        Number of latest bills to import (default: 100)
+  --limit <number>        Number of latest bills to import (default: 100, ignored if --knesset-num is set)
+  --knesset-num <number> Import all bills for specific Knesset (e.g., 25 for current Knesset)
   --topic-name <name>     Topic name (default: "חוקים מהמליאה")
   --db-path <path>        Path to SQLite database (default: ../data/knesset_data.db)
   --dry-run              Test parsing without importing
@@ -370,6 +410,9 @@ Options:
 Examples:
   # Dry run to test:
   tsx scripts/import-knesset-bills-from-sqlite.ts --limit 100 --dry-run
+  
+  # Import all bills from Knesset 25:
+  tsx scripts/import-knesset-bills-from-sqlite.ts --knesset-num 25
   
   # Import 100 latest bills:
   tsx scripts/import-knesset-bills-from-sqlite.ts --limit 100

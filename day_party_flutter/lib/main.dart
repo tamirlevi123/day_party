@@ -9,6 +9,8 @@ import 'core/logger.dart';
 import 'providers/auth_provider.dart';
 import 'providers/home_provider.dart';
 import 'providers/thread_provider.dart';
+import 'providers/knesset/knesset_database_provider.dart';
+import 'providers/memes_provider.dart';
 import 'screens/splash_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
@@ -212,6 +214,8 @@ class _DayPartyAppState extends State<DayPartyApp> {
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => HomeProvider()),
         ChangeNotifierProvider(create: (_) => ThreadProvider()),
+        ChangeNotifierProvider(create: (_) => KnessetDatabaseProvider()),
+        ChangeNotifierProvider(create: (_) => MemesProvider()..loadMemes()),
       ],
       child: MaterialApp(
         navigatorKey: _navigatorKey,

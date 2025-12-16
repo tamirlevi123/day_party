@@ -1,5 +1,5 @@
 import express from 'express';
-import { startSocialAuth, handleGoogleCallback, handleSocialCallback, logout } from '../controllers/auth.controller';
+import { startSocialAuth, handleGoogleCallback, handleSocialCallback, logout, refreshToken } from '../controllers/auth.controller';
 import { authenticate } from '../middleware/auth.middleware';
 
 const router = express.Router();
@@ -12,6 +12,9 @@ router.get('/google/callback', handleGoogleCallback);
 
 // POST /auth/social/callback - Alternative: App can call this directly with code
 router.post('/social/callback', handleSocialCallback);
+
+// POST /auth/refresh - Refresh access token using refresh token
+router.post('/refresh', refreshToken);
 
 // POST /auth/logout - Logout user (requires authentication)
 router.post('/logout', authenticate, logout);

@@ -207,9 +207,14 @@ def populate_table_from_json(conn, cursor, table_name, json_file_path, columns):
     column_names = list(columns.keys())
     quoted_column_names = [f'"{name}"' for name in column_names]
     placeholders = ", ".join(["?"] * len(column_names))
-    sql_insert = f'INSERT OR IGNORE INTO "{table_name}" ({", ".join(quoted_column_names)}) VALUES ({placeholders})'
+    # Use REPLACE for _KNS_DocumentBill to update existing records, IGNORE for others
+    if table_name == "_KNS_DocumentBill":
+        sql_insert = f'INSERT OR REPLACE INTO "{table_name}" ({", ".join(quoted_column_names)}) VALUES ({placeholders})'
+        logging.info(f"Using INSERT OR REPLACE for {table_name} to update existing records")
+    else:
+        sql_insert = f'INSERT OR IGNORE INTO "{table_name}" ({", ".join(quoted_column_names)}) VALUES ({placeholders})'
     logging.debug(f"Using SQL for insertion into {table_name}: {sql_insert}")
-    # Using INSERT OR IGNORE to skip rows that violate constraints (like duplicate primary keys)
+    # Using INSERT OR REPLACE for DocumentBill to update records, INSERT OR IGNORE for others to skip duplicates
 
     try:
         with open(json_file_path, 'r', encoding='utf-8') as f:

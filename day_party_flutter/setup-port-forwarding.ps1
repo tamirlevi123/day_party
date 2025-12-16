@@ -15,6 +15,11 @@
 # You must run this script again after each emulator restart.
 #
 # See EMULATOR_SETUP.md in the project root for complete documentation.
+#
+# Usage (recommended order):
+#   1. .cmd version (bypasses PowerShell execution policy): .\setup-port-forwarding.cmd
+#   2. PowerShell with bypass: powershell -ExecutionPolicy Bypass -File .\setup-port-forwarding.ps1
+#   3. Direct PowerShell (may fail if execution policy is restricted): .\setup-port-forwarding.ps1
 
 $adbPath = "$env:LOCALAPPDATA\Android\sdk\platform-tools\adb.exe"
 

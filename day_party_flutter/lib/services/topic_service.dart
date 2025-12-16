@@ -49,9 +49,13 @@ class TopicService {
     }
   }
 
-  Future<List<ThreadSummary>> getTopicThreads(String topicId) async {
+  Future<List<ThreadSummary>> getTopicThreads(String topicId, {String? statusIDs}) async {
     try {
-      final response = await _dio.get('/topics/$topicId/threads');
+      final queryParams = statusIDs != null ? {'statusID': statusIDs} : null;
+      final response = await _dio.get(
+        '/topics/$topicId/threads',
+        queryParameters: queryParams,
+      );
       final data = ThreadsResponse.fromJson(response.data);
       return data.threads;
     } catch (e) {
