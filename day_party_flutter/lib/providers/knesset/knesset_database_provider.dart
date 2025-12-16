@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
-import '../../services/knesset/knesset_database_service.dart';
+import '../../services/knesset/knesset_api_service.dart';
 import '../../models/knesset/knesset_bill.dart';
 import '../../models/knesset/knesset_document_bill.dart';
 
-/// Provider for KnessetDatabaseService
+/// Provider for Knesset API service (replaces SQLite database service)
 class KnessetDatabaseProvider with ChangeNotifier {
-  final KnessetDatabaseService _service = KnessetDatabaseService();
+  final KnessetApiService _service = KnessetApiService();
   
-  KnessetDatabaseService get service => _service;
+  KnessetApiService get service => _service;
 
   /// Get all bills
   Future<List<KnessetBill>> getAllBills() async {
@@ -84,13 +84,19 @@ class KnessetDatabaseProvider with ChangeNotifier {
   }
 
   /// Get status description by StatusID
+  /// Note: Status descriptions are now provided by backend in thread metadata
+  /// This method is kept for compatibility but may return null
   Future<String?> getStatusDescription(int statusID) async {
-    return await _service.getStatusDescription(statusID);
-  }
-
-  /// Close database connection
-  Future<void> close() async {
-    await _service.close();
+    try {
+      final statuses = await _service.getAllStatuses();
+      final status = statuses.firstWhere(
+        (s) => s['StatusID'] == statusID,
+        orElse: () => <String, dynamic>{},
+      );
+      return status['Desc'] as String?;
+    } catch (e) {
+      return null;
+    }
   }
 }
 

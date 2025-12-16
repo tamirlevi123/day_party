@@ -82,6 +82,14 @@ class ThreadSummary {
     if (billId is String) return int.tryParse(billId);
     return null;
   }
+
+  /// Get status description from metadata (populated by backend)
+  String? get statusDescription {
+    if (metadata == null) return null;
+    final desc = metadata!['statusDescription'];
+    if (desc is String) return desc;
+    return null;
+  }
 }
 
 class ThreadsResponse {

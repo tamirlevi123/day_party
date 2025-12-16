@@ -58,15 +58,6 @@ class ThreadListScreen extends StatelessWidget {
     }
   }
 
-  /// Get status description for a status ID
-  Future<String?> _getStatusDescription(BuildContext context, int statusID) async {
-    try {
-      final provider = Provider.of<KnessetDatabaseProvider>(context, listen: false);
-      return await provider.getStatusDescription(statusID);
-    } catch (e) {
-      return null;
-    }
-  }
 
   /// Extract plain text preview from Delta JSON or HTML
   Widget _buildDescriptionPreview(String description) {
@@ -153,12 +144,11 @@ class ThreadListScreen extends StatelessWidget {
                 return FutureBuilder<List<Map<String, dynamic>>>(
                   future: _getKnesset25Statuses(knessetProvider),
                   builder: (context, snapshot) {
-                    if (!snapshot.hasData) {
-                      return const SizedBox.shrink();
-                    }
-                    final statuses = snapshot.data!;
                     return Consumer<ThreadProvider>(
                       builder: (context, threadProvider, _) {
+                        // Always show the dropdown, even if statuses are loading or empty
+                        final statuses = snapshot.hasData ? snapshot.data! : [];
+                        
                         return Container(
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                           decoration: BoxDecoration(
@@ -171,42 +161,74 @@ class ThreadListScreen extends StatelessWidget {
                               ),
                             ],
                           ),
-                          child: DropdownButtonFormField<String?>(
-                            value: threadProvider.statusFilter,
-                            decoration: const InputDecoration(
-                              labelText: 'סטטוס',
-                              border: OutlineInputBorder(),
-                              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            ),
-                            items: <DropdownMenuItem<String?>>[
-                              const DropdownMenuItem<String?>(
-                                value: null,
-                                child: Text('הכל'),
-                              ),
-                              ...statuses.map<DropdownMenuItem<String?>>((status) {
+                          child: Builder(
+                            builder: (context) {
+                              // Get current filter value
+                              final currentFilter = threadProvider.statusFilter;
+                              
+                              // Build items list first
+                              final items = <DropdownMenuItem<String?>>[
+                                const DropdownMenuItem<String?>(
+                                  value: null,
+                                  child: Text('הכל'),
+                                ),
+                              ];
+                              
+                              if (snapshot.connectionState == ConnectionState.waiting) {
+                                items.add(
+                                  const DropdownMenuItem<String?>(
+                                    value: 'loading',
+                                    enabled: false,
+                                    child: Text('טוען...'),
+                                  ),
+                                );
+                              }
+                              
+                              // Add status items
+                              for (final status in statuses) {
                                 final statusIDs = status['StatusIDs'] as List<int>;
                                 final desc = status['Desc'] as String;
-                                // Use comma-separated StatusIDs as the value
                                 final statusIDsValue = statusIDs.join(',');
-                                // Show description with all StatusIDs in parentheses
                                 final statusIDsDisplay = statusIDs.length > 1 
                                   ? statusIDs.join(', ')
                                   : statusIDs.first.toString();
-                                return DropdownMenuItem<String?>(
-                                  value: statusIDsValue,
-                                  child: Text('$desc ($statusIDsDisplay)'),
+                                items.add(
+                                  DropdownMenuItem<String?>(
+                                    value: statusIDsValue,
+                                    child: Text('$desc ($statusIDsDisplay)'),
+                                  ),
                                 );
-                              }),
-                            ],
-                            onChanged: (value) {
-                              final memesProvider = Provider.of<MemesProvider>(context, listen: false);
-                              threadProvider.setStatusFilter(
-                                topicId, 
-                                value,
-                                availableMemes: memesProvider.hasMemes ? memesProvider.memes : null,
+                              }
+                              
+                              // Check if current filter value exists in the items
+                              final hasCurrentValue = currentFilter == null || 
+                                items.any((item) => item.value == currentFilter);
+                              
+                              // If current value doesn't exist in items, use null to avoid assertion error
+                              // But keep the filter active in the provider (it will still filter threads)
+                              final displayValue = hasCurrentValue ? currentFilter : null;
+                              
+                              return DropdownButtonFormField<String?>(
+                                value: displayValue,
+                                decoration: const InputDecoration(
+                                  labelText: 'סטטוס',
+                                  border: OutlineInputBorder(),
+                                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                ),
+                                items: items,
+                                onChanged: snapshot.connectionState == ConnectionState.waiting 
+                                  ? null 
+                                  : (value) {
+                                      final memesProvider = Provider.of<MemesProvider>(context, listen: false);
+                                      threadProvider.setStatusFilter(
+                                        topicId, 
+                                        value,
+                                        availableMemes: memesProvider.hasMemes ? memesProvider.memes : null,
+                                      );
+                                    },
+                                isExpanded: true,
                               );
                             },
-                            isExpanded: true,
                           ),
                         );
                       },
@@ -222,9 +244,15 @@ class ThreadListScreen extends StatelessWidget {
                   return Consumer<MemesProvider>(
                     builder: (context, memesProvider, _) {
                       // Load threads when provider is first created
+                      // Ensure default filter '114' is applied on first load
                       if (provider.threads.isEmpty && !provider.isLoading) {
                         WidgetsBinding.instance.addPostFrameCallback((_) {
-                          provider.loadThreads(topicId, availableMemes: memesProvider.hasMemes ? memesProvider.memes : null);
+                          // If statusFilter is null, set it to default '114' before loading
+                          if (provider.statusFilter == null) {
+                            provider.setStatusFilter(topicId, '114', availableMemes: memesProvider.hasMemes ? memesProvider.memes : null);
+                          } else {
+                            provider.loadThreads(topicId, availableMemes: memesProvider.hasMemes ? memesProvider.memes : null);
+                          }
                         });
                       }
                       
@@ -350,45 +378,53 @@ class ThreadListScreen extends StatelessWidget {
                                                 style: const TextStyle(fontSize: 12),
                                               ),
                                               if (thread.billId != null)
-                                                Flexible(
-                                                  child: Text(
-                                                    'Bill ID: ${thread.billId}',
-                                                    style: TextStyle(
-                                                      fontSize: 12,
-                                                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                                                    ),
-                                                    overflow: TextOverflow.ellipsis,
+                                                Text(
+                                                  'Bill ID: ${thread.billId}',
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                                                   ),
                                                 ),
-                                              if (thread.billStatusID != null)
-                                                FutureBuilder<String?>(
-                                                  future: _getStatusDescription(context, thread.billStatusID!),
-                                                  builder: (context, snapshot) {
-                                                    if (snapshot.hasData && snapshot.data != null) {
-                                                      return ConstrainedBox(
-                                                        constraints: BoxConstraints(
-                                                          maxWidth: constraints.maxWidth * 0.4,
-                                                        ),
-                                                        child: Container(
-                                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                                          decoration: BoxDecoration(
-                                                            color: Theme.of(context).colorScheme.primaryContainer,
-                                                            borderRadius: BorderRadius.circular(4),
-                                                          ),
-                                                          child: Text(
-                                                            snapshot.data!,
-                                                            style: TextStyle(
-                                                              fontSize: 11,
-                                                              color: Theme.of(context).colorScheme.onPrimaryContainer,
-                                                            ),
-                                                            overflow: TextOverflow.ellipsis,
-                                                            maxLines: 1,
-                                                          ),
-                                                        ),
-                                                      );
-                                                    }
-                                                    return const SizedBox.shrink();
-                                                  },
+                                              // Show status description from metadata (populated by backend)
+                                              if (thread.statusDescription != null && thread.statusDescription!.isNotEmpty)
+                                                ConstrainedBox(
+                                                  constraints: BoxConstraints(
+                                                    maxWidth: constraints.maxWidth * 0.4,
+                                                  ),
+                                                  child: Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                                    decoration: BoxDecoration(
+                                                      color: Theme.of(context).colorScheme.primaryContainer,
+                                                      borderRadius: BorderRadius.circular(4),
+                                                    ),
+                                                    child: Text(
+                                                      thread.statusDescription!,
+                                                      style: TextStyle(
+                                                        fontSize: 11,
+                                                        color: Theme.of(context).colorScheme.onPrimaryContainer,
+                                                      ),
+                                                      overflow: TextOverflow.ellipsis,
+                                                      maxLines: 1,
+                                                    ),
+                                                  ),
+                                                )
+                                              // Fallback: show statusID if description not available
+                                              else if (thread.billStatusID != null)
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: Theme.of(context).colorScheme.surfaceVariant,
+                                                    borderRadius: BorderRadius.circular(4),
+                                                  ),
+                                                  child: Text(
+                                                    'Status: ${thread.billStatusID}',
+                                                    style: TextStyle(
+                                                      fontSize: 11,
+                                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                                    ),
+                                                    overflow: TextOverflow.ellipsis,
+                                                    maxLines: 1,
+                                                  ),
                                                 ),
                                             ],
                                           );

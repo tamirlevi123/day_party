@@ -4,12 +4,31 @@ import path from 'path';
 import { PrismaClient } from '@prisma/client';
 import apiRoutes from './routes';
 import { errorHandler, notFoundHandler } from './middleware/error.middleware';
+import { loadStatusCache } from './services/knesset-status.service';
 
 dotenv.config();
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000', 10);
-export const prisma = new PrismaClient();
+export const prisma = new PrismaClient({
+  log: [
+    { emit: 'event', level: 'query' },
+    { emit: 'event', level: 'error' },
+    { emit: 'event', level: 'info' },
+    { emit: 'event', level: 'warn' },
+  ],
+});
+
+// Log all Prisma queries
+prisma.$on('query' as never, (e: any) => {
+  console.log(`[SQL] Query: ${e.query}`);
+  console.log(`[SQL] Params: ${e.params}`);
+  console.log(`[SQL] Duration: ${e.duration}ms`);
+});
+
+prisma.$on('error' as never, (e: any) => {
+  console.error(`[Prisma Error] ${e.message}`);
+});
 
 app.use(express.json());
 
@@ -70,6 +89,11 @@ app.get('/admin', (_req, res) => {
 // Error handling (must be last)
 app.use(notFoundHandler);
 app.use(errorHandler);
+
+// Load Knesset status cache at startup
+loadStatusCache().catch((error) => {
+  console.error('[Server] Failed to load Knesset status cache:', error);
+});
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Day Party API server running on port ${PORT}`);

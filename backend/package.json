@@ -19,6 +19,7 @@
     "import:comments": "tsx scripts/import-comments.ts",
     "import:knesset-bills": "tsx scripts/import-knesset-bills.ts",
     "import:knesset-bills-sqlite": "tsx scripts/import-knesset-bills-from-sqlite.ts",
+    "import:sqlite-to-mysql": "tsx scripts/import-sqlite-to-mysql.ts",
     "import:memes": "tsx scripts/import-memes.ts",
     "create:memes-topic": "tsx scripts/create-memes-topic.ts",
     "cleanup:imported": "tsx scripts/cleanup-imported-threads.ts"

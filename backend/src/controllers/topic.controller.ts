@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import { getStatusDescription } from '../services/knesset-status.service';
 
 const prisma = new PrismaClient();
 
@@ -107,10 +108,14 @@ export const getTopicThreads = async (req: Request, res: Response): Promise<Resp
       ? statusIDParam.split(',').map(id => parseInt(id.trim(), 10)).filter(id => !isNaN(id))
       : undefined;
 
+    console.log(`[TopicController] getTopicThreads called: topicId=${topicId}, statusIDs=${statusIDs?.join(', ') || 'none'}`);
+
     // Verify topic exists
+    console.log(`[SQL] Checking if topic exists: topicId=${topicId}`);
     const topic = await prisma.topic.findUnique({
       where: { id: topicId },
     });
+    console.log(`[SQL] Topic lookup result: ${topic ? 'found' : 'not found'}`);
 
     if (!topic) {
       return res.status(404).json({
@@ -120,6 +125,7 @@ export const getTopicThreads = async (req: Request, res: Response): Promise<Resp
     }
 
     // Get threads for this topic
+    console.log(`[SQL] Fetching threads for topicId=${topicId}, status='open'`);
     const threads = await prisma.thread.findMany({
       where: {
         topicId: topicId,
@@ -145,12 +151,32 @@ export const getTopicThreads = async (req: Request, res: Response): Promise<Resp
         createdAt: 'desc',
       },
     });
+    console.log(`[SQL] Found ${threads.length} threads`);
 
     // Format response and filter by statusID if provided
+    console.log(`[TopicController] Formatting ${threads.length} threads...`);
     let formattedThreads = threads.map((thread) => {
       const rootNode = thread.nodes[0];
       const metadata = rootNode?.metadataJson as Record<string, any> | null;
       const billStatusID = metadata?.statusID as number | undefined;
+
+      // Get status description from in-memory cache (no SQL query - uses in-memory cache)
+      const statusDescription = getStatusDescription(billStatusID);
+      
+      // Log metadata for first few threads
+      if (threads.indexOf(thread) < 3) {
+        console.log(`[TopicController] Thread ${thread.id}:`);
+        console.log(`[TopicController]   Title: ${thread.title}`);
+        console.log(`[TopicController]   Metadata: ${JSON.stringify(metadata)}`);
+        console.log(`[TopicController]   billStatusID: ${billStatusID}`);
+        console.log(`[TopicController]   statusDescription: ${statusDescription || 'null'}`);
+        console.log(`[TopicController]   nodeCount: ${thread._count.nodes}`);
+      }
+
+      // Enhance metadata with status description
+      const enhancedMetadata = metadata 
+        ? { ...metadata, statusDescription }
+        : null;
 
       return {
         threadId: thread.id,
@@ -160,18 +186,32 @@ export const getTopicThreads = async (req: Request, res: Response): Promise<Resp
         status: thread.status,
         nodeCount: thread._count.nodes,
         createdAt: thread.createdAt.toISOString(),
-        metadata: metadata || null, // Include root node metadata
+        metadata: enhancedMetadata, // Include root node metadata with status description
       };
     });
 
     // Filter by statusIDs if provided (match any of the provided statusIDs)
     if (statusIDs !== undefined && statusIDs.length > 0) {
+      console.log(`[TopicController] Filtering threads by statusIDs: ${statusIDs.join(', ')}`);
+      const beforeCount = formattedThreads.length;
       formattedThreads = formattedThreads.filter((thread) => {
         const metadata = thread.metadata as Record<string, any> | null;
         const billStatusID = metadata?.statusID as number | undefined;
-        return billStatusID !== undefined && statusIDs.includes(billStatusID);
+        const matches = billStatusID !== undefined && statusIDs.includes(billStatusID);
+        if (!matches) {
+          console.log(`[TopicController] Thread ${thread.threadId} filtered out: billStatusID=${billStatusID}, not in [${statusIDs.join(', ')}]`);
+        }
+        return matches;
       });
+      console.log(`[TopicController] Filtered ${beforeCount} threads down to ${formattedThreads.length} threads`);
     }
+
+    console.log(`[TopicController] Returning ${formattedThreads.length} threads to client`);
+    console.log(`[TopicController] Response sample (first thread):`, formattedThreads.length > 0 ? {
+      threadId: formattedThreads[0].threadId,
+      title: formattedThreads[0].title,
+      metadata: formattedThreads[0].metadata,
+    } : 'no threads');
 
     return res.status(200).json({
       threads: formattedThreads,

@@ -71,8 +71,32 @@ class ThreadProvider with ChangeNotifier {
     notifyListeners();
 
     try {
+      print('🔍 ThreadProvider: Loading threads for topic $topicId with statusFilter: $_statusFilter');
       _threads = await _topicService.getTopicThreads(topicId, statusIDs: _statusFilter);
       _error = null;
+      
+      print('🔍 ThreadProvider: Loaded ${_threads.length} threads');
+      if (_threads.isNotEmpty) {
+        print('🔍 ThreadProvider: First 3 thread IDs: ${_threads.take(3).map((t) => t.threadId).join(", ")}');
+        print('🔍 ThreadProvider: First 3 thread titles: ${_threads.take(3).map((t) => t.title).join(" | ")}');
+        
+        // Check metadata presence
+        final threadsWithMetadata = _threads.where((t) => t.billStatusID != null).length;
+        final threadsWithoutMetadata = _threads.length - threadsWithMetadata;
+        print('🔍 ThreadProvider: Threads with billStatusID: $threadsWithMetadata, without: $threadsWithoutMetadata');
+        
+        if (_threads.any((t) => t.billStatusID != null)) {
+          final statusIds = _threads.where((t) => t.billStatusID != null).map((t) => t.billStatusID).toSet();
+          print('🔍 ThreadProvider: Unique billStatusIDs in threads: ${statusIds.join(", ")}');
+        } else {
+          print('⚠️ ThreadProvider: WARNING - No threads have billStatusID! Filter may not be working.');
+          // Show sample of first thread's metadata structure
+          if (_threads.isNotEmpty) {
+            final firstThread = _threads.first;
+            print('🔍 ThreadProvider: Sample thread metadata - billId: ${firstThread.billId}, billStatusID: ${firstThread.billStatusID}');
+          }
+        }
+      }
       
       // Assign memes to positions if memes are available
       if (availableMemes != null && availableMemes.isNotEmpty) {
@@ -80,6 +104,7 @@ class ThreadProvider with ChangeNotifier {
       }
     } catch (e) {
       _error = e.toString();
+      print('❌ ThreadProvider: Error loading threads: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
