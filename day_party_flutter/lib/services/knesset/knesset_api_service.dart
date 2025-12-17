@@ -5,10 +5,13 @@ import '../../core/logger.dart';
 /// Service for fetching Knesset data from the backend API
 class KnessetApiService {
   /// Get all statuses
-  Future<List<Map<String, dynamic>>> getAllStatuses() async {
+  Future<List<Map<String, dynamic>>> getAllStatuses({int? knessetNum}) async {
     try {
-      appLogger.i('🔵 KnessetApiService: Fetching statuses from /knesset/statuses');
-      final response = await ApiClient.instance.get('/knesset/statuses');
+      appLogger.i('🔵 KnessetApiService: Fetching statuses from /knesset/statuses (knessetNum=$knessetNum)');
+      final response = await ApiClient.instance.get(
+        '/knesset/statuses',
+        queryParameters: knessetNum != null ? {'knessetNum': knessetNum} : null,
+      );
       appLogger.i('🔵 KnessetApiService: Received response, status: ${response.statusCode}');
       
       final data = response.data as Map<String, dynamic>;

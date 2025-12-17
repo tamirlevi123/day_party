@@ -227,7 +227,7 @@ class _KnessetDocumentViewerState extends State<KnessetDocumentViewer> {
                           Text(
                             widget.document.applicationDesc!,
                             style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onPrimaryContainer.withOpacity(0.8),
+                              color: theme.colorScheme.onPrimaryContainer.withAlpha(204),
                             ),
                           ),
                       ],
@@ -315,7 +315,7 @@ class _KnessetDocumentViewerState extends State<KnessetDocumentViewer> {
                           ),
                         if (_isLoading && _error == null)
                           Container(
-                            color: theme.scaffoldBackgroundColor.withOpacity(0.8),
+                            color: theme.scaffoldBackgroundColor.withAlpha(204),
                             child: const Center(
                               child: CircularProgressIndicator(),
                             ),

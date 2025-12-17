@@ -104,7 +104,7 @@ export const getTopicThreads = async (req: Request, res: Response): Promise<Resp
     const { topicId } = req.params;
     // Support both single statusID and comma-separated list of statusIDs
     const statusIDParam = req.query.statusID as string | undefined;
-    const statusIDs = statusIDParam 
+    let statusIDs = statusIDParam 
       ? statusIDParam.split(',').map(id => parseInt(id.trim(), 10)).filter(id => !isNaN(id))
       : undefined;
 
@@ -122,6 +122,86 @@ export const getTopicThreads = async (req: Request, res: Response): Promise<Resp
         error: 'not_found',
         message: 'Topic not found',
       });
+    }
+
+    // Knesset status filtering should only apply to the Knesset bills topic.
+    // Other topics do not have bill metadata, so filtering would incorrectly hide all threads.
+    const KNESSET_BILLS_TOPIC_NAME = 'חוקים מהמליאה';
+    if (statusIDs !== undefined && statusIDs.length > 0 && topic.name !== KNESSET_BILLS_TOPIC_NAME) {
+      console.log(
+        `[TopicController] Ignoring statusIDs filter for non-knesset topic "${topic.name}" (topicId=${topicId}).`
+      );
+      statusIDs = undefined;
+    }
+
+    // IMPORTANT PERFORMANCE PATH:
+    // If statusIDs are provided for the Knesset bills topic, filter in SQL (instead of
+    // fetching thousands of threads and filtering in memory).
+    if (statusIDs !== undefined && statusIDs.length > 0 && topic.name === KNESSET_BILLS_TOPIC_NAME) {
+      const ids = statusIDs.filter((n) => Number.isFinite(n));
+      if (ids.length === 0) {
+        return res.status(200).json({ threads: [] });
+      }
+
+      const inList = ids.join(','); // ints only
+      console.log(`[TopicController] Using SQL-level filtering for knesset statusIDs: ${inList}`);
+      const escapedTopicId = topicId.replace(/'/g, "''");
+
+      const rows = await prisma.$queryRawUnsafe<Array<{
+        threadId: string;
+        topicId: string;
+        title: string;
+        description: string | null;
+        status: string;
+        createdAt: Date;
+        nodeCount: bigint | number;
+        metadataJson: any;
+      }>>(`
+        SELECT
+          t.id AS threadId,
+          t.topic_id AS topicId,
+          t.title AS title,
+          t.description AS description,
+          t.status AS status,
+          t.created_at AS createdAt,
+          COALESCE(nc.nodeCount, 0) AS nodeCount,
+          rn.metadata_json AS metadataJson
+        FROM threads t
+        INNER JOIN nodes rn
+          ON rn.thread_id = t.id
+         AND rn.parent_node_id IS NULL
+        LEFT JOIN (
+          SELECT thread_id, COUNT(*) AS nodeCount
+          FROM nodes
+          GROUP BY thread_id
+        ) nc ON nc.thread_id = t.id
+        WHERE t.topic_id = '${escapedTopicId}'
+          AND t.status = 'open'
+          AND rn.metadata_json IS NOT NULL
+          AND CAST(JSON_UNQUOTE(JSON_EXTRACT(rn.metadata_json, '$.statusID')) AS UNSIGNED) IN (${inList})
+        ORDER BY t.created_at DESC
+      `);
+
+      const formatted = rows.map((r) => {
+        const metadata = (r.metadataJson ?? null) as Record<string, any> | null;
+        const billStatusID = metadata?.statusID as number | undefined;
+        const statusDescription = getStatusDescription(billStatusID);
+        const enhancedMetadata = metadata ? { ...metadata, statusDescription } : null;
+
+        return {
+          threadId: r.threadId,
+          topicId: r.topicId,
+          title: r.title,
+          description: r.description,
+          status: r.status,
+          nodeCount: Number(r.nodeCount),
+          createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : new Date(r.createdAt as any).toISOString(),
+          metadata: enhancedMetadata,
+        };
+      });
+
+      console.log(`[TopicController] Returning ${formatted.length} filtered threads (SQL-level)`);
+      return res.status(200).json({ threads: formatted });
     }
 
     // Get threads for this topic
@@ -229,9 +309,6 @@ export const getTopicThreads = async (req: Request, res: Response): Promise<Resp
         const metadata = thread.metadata as Record<string, any> | null;
         const billStatusID = metadata?.statusID as number | undefined;
         const matches = billStatusID !== undefined && statusIDs.includes(billStatusID);
-        if (!matches) {
-          console.log(`[TopicController] Thread ${thread.threadId} filtered out: billStatusID=${billStatusID}, not in [${statusIDs.join(', ')}]`);
-        }
         return matches;
       });
       console.log(`[TopicController] Filtered ${beforeCount} threads down to ${formattedThreads.length} threads`);

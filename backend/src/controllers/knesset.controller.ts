@@ -6,11 +6,22 @@ const prisma = new PrismaClient();
 
 /**
  * GET /api/knesset/statuses
- * Get all statuses from _KNS_Status table
+ * Get all statuses from Knesset status table.
+ * Optional query params:
+ * - knessetNum: if provided, returns only statuses that appear in bills for that Knesset number
  */
-export const getStatuses = async (_req: Request, res: Response): Promise<Response | void> => {
+export const getStatuses = async (req: Request, res: Response): Promise<Response | void> => {
   try {
     console.log('[KnessetController] getStatuses called');
+
+    const knessetNumParam = req.query.knessetNum as string | undefined;
+    const knessetNum = knessetNumParam ? parseInt(knessetNumParam, 10) : null;
+    if (knessetNumParam && (knessetNum === null || Number.isNaN(knessetNum))) {
+      return res.status(400).json({
+        error: 'bad_request',
+        message: 'knessetNum must be a valid number',
+      });
+    }
 
     const tableName = await resolveMySqlTableName(prisma, [
       '_KNS_Status',
@@ -42,7 +53,49 @@ export const getStatuses = async (_req: Request, res: Response): Promise<Respons
     }
 
     console.log(`[SQL] Querying status table: ${tableName}`);
-    
+
+    // If knessetNum is provided, filter statuses to those used by bills in that Knesset.
+    // This prevents the client from downloading the entire bills table just to build a dropdown.
+    if (knessetNum !== null) {
+      const billTable = await resolveMySqlTableName(prisma, [
+        '_KNS_Bill',
+        '_kns_bill',
+        'KNS_Bill',
+        'KNS_Bills',
+        'kns_bill',
+        'kns_bills',
+      ]);
+
+      if (!billTable) {
+        const db = await getCurrentDatabaseName(prisma);
+        return res.status(500).json({
+          error: 'internal_error',
+          message: 'Knesset bill table not found on server database (required for knessetNum filter)',
+          details: {
+            expectedTable: '_KNS_Bill',
+            db,
+          },
+        });
+      }
+
+      console.log(`[SQL] Filtering statuses by bills table ${billTable} for KnessetNum=${knessetNum}`);
+
+      const statuses = await prisma.$queryRawUnsafe<Array<{
+        StatusID: number;
+        Desc: string;
+        TypeID: number | null;
+        TypeDesc: string | null;
+      }>>(`
+        SELECT DISTINCT s.StatusID, s.\`Desc\`, s.TypeID, s.TypeDesc
+        FROM \`${tableName}\` s
+        INNER JOIN \`${billTable}\` b ON b.StatusID = s.StatusID
+        WHERE b.KnessetNum = ${knessetNum}
+        ORDER BY s.TypeID, s.\`Desc\`
+      `);
+
+      return res.status(200).json({ statuses });
+    }
+
     const statuses = await prisma.$queryRawUnsafe<Array<{
       StatusID: number;
       Desc: string;

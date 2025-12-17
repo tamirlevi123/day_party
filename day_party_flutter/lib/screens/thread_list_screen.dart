@@ -8,11 +8,39 @@ import '../widgets/user_profile_action.dart';
 import '../widgets/html_content_widget.dart';
 import '../widgets/meme_card.dart';
 import '../core/logger.dart';
+import '../services/topic_service.dart';
 
-class ThreadListScreen extends StatelessWidget {
+class ThreadListScreen extends StatefulWidget {
   final String topicId;
 
   const ThreadListScreen({super.key, required this.topicId});
+
+  @override
+  State<ThreadListScreen> createState() => _ThreadListScreenState();
+}
+
+class _ThreadListScreenState extends State<ThreadListScreen> {
+  static const String _knessetBillsTopicName = 'חוקים מהמליאה';
+  late final Future<bool> _isKnessetBillsTopicFuture;
+  bool _didInitKnessetDefaultFilter = false;
+  bool _didInitialThreadLoad = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _isKnessetBillsTopicFuture = _isKnessetBillsTopic();
+  }
+
+  Future<bool> _isKnessetBillsTopic() async {
+    try {
+      final topic = await TopicService().getTopic(widget.topicId);
+      return topic.name.trim() == _knessetBillsTopicName;
+    } catch (e) {
+      // Default to false to avoid applying knesset-specific filtering globally.
+      appLogger.w('ThreadListScreen: Failed to load topic name; disabling knesset status filter', error: e);
+      return false;
+    }
+  }
 
   /// Get unique statuses for Knesset 25 bills, grouped by description
   /// Returns a list where each entry has a description and all StatusIDs with that description
@@ -20,28 +48,16 @@ class ThreadListScreen extends StatelessWidget {
     try {
       appLogger.i('🟡 ThreadListScreen: _getKnesset25Statuses called');
       
-      // Get all statuses and filter to those that appear in Knesset 25 bills
-      appLogger.i('🟡 ThreadListScreen: Fetching all statuses...');
-      final allStatuses = await provider.getAllStatuses();
-      appLogger.i('🟡 ThreadListScreen: Received ${allStatuses.length} statuses from provider');
-      if (allStatuses.isEmpty) {
-        appLogger.w('🟡 ThreadListScreen: WARNING - No statuses received! Dropdown will be empty.');
+      // Ask the server for *only* statuses that appear in Knesset 25.
+      // This avoids downloading the entire bills list (can be huge).
+      appLogger.i('🟡 ThreadListScreen: Fetching statuses for Knesset 25...');
+      final knesset25Statuses = await provider.getAllStatuses(knessetNum: 25);
+      appLogger.i('🟡 ThreadListScreen: Received ${knesset25Statuses.length} statuses for Knesset 25');
+      if (knesset25Statuses.isEmpty) {
+        appLogger.w('🟡 ThreadListScreen: WARNING - No statuses received for Knesset 25! Dropdown will be empty.');
       } else {
-        appLogger.i('🟡 ThreadListScreen: First 3 statuses: ${allStatuses.take(3).map((s) => '${s['StatusID']}: ${s['Desc']}').join(", ")}');
+        appLogger.i('🟡 ThreadListScreen: First 3 statuses: ${knesset25Statuses.take(3).map((s) => '${s['StatusID']}: ${s['Desc']}').join(", ")}');
       }
-      
-      appLogger.i('🟡 ThreadListScreen: Fetching Knesset 25 bills...');
-      final bills = await provider.getBillsByKnesset(knessetNum: 25);
-      appLogger.i('🟡 ThreadListScreen: Received ${bills.length} bills for Knesset 25');
-      
-      final statusIDsInKnesset25 = bills.map((b) => b.statusID).toSet();
-      appLogger.i('🟡 ThreadListScreen: Found ${statusIDsInKnesset25.length} unique statusIDs in Knesset 25 bills: ${statusIDsInKnesset25.take(10).join(", ")}');
-      
-      // Filter statuses to only those that appear in Knesset 25
-      final knesset25Statuses = allStatuses
-          .where((status) => statusIDsInKnesset25.contains(status['StatusID']))
-          .toList();
-      appLogger.i('🟡 ThreadListScreen: Filtered to ${knesset25Statuses.length} statuses that appear in Knesset 25');
       
       // Group by description (Desc field) - treat statuses with same name as one
       final Map<String, List<int>> statusesByDesc = {};
@@ -160,98 +176,106 @@ class ThreadListScreen extends StatelessWidget {
         ),
         body: Column(
           children: [
-            // Status filter dropdown
-            Consumer<KnessetDatabaseProvider>(
-              builder: (context, knessetProvider, _) {
-                return FutureBuilder<List<Map<String, dynamic>>>(
-                  future: _getKnesset25Statuses(knessetProvider),
-                  builder: (context, snapshot) {
-                    return Consumer<ThreadProvider>(
-                      builder: (context, threadProvider, _) {
-                        // Always show the dropdown, even if statuses are loading or empty
-                        final statuses = snapshot.hasData ? snapshot.data! : [];
-                        
-                        return Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.surface,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.05),
-                                blurRadius: 4,
-                                offset: const Offset(0, 2),
+            // Status filter dropdown (ONLY for the Knesset bills topic: "חוקים מהמליאה")
+            FutureBuilder<bool>(
+              future: _isKnessetBillsTopicFuture,
+              builder: (context, topicSnapshot) {
+                final isKnessetBillsTopic = topicSnapshot.data == true;
+                if (!isKnessetBillsTopic) {
+                  return const SizedBox.shrink();
+                }
+
+                return Consumer<KnessetDatabaseProvider>(
+                  builder: (context, knessetProvider, _) {
+                    return FutureBuilder<List<Map<String, dynamic>>>(
+                      future: _getKnesset25Statuses(knessetProvider),
+                      builder: (context, snapshot) {
+                        return Consumer<ThreadProvider>(
+                          builder: (context, threadProvider, _) {
+                            // Always show the dropdown, even if statuses are loading or empty
+                            final statuses = snapshot.hasData ? snapshot.data! : [];
+
+                            return Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.surface,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withAlpha(13),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
-                          child: Builder(
-                            builder: (context) {
-                              // Get current filter value
-                              final currentFilter = threadProvider.statusFilter;
-                              
-                              // Build items list first
-                              final items = <DropdownMenuItem<String?>>[
-                                const DropdownMenuItem<String?>(
-                                  value: null,
-                                  child: Text('הכל'),
-                                ),
-                              ];
-                              
-                              if (snapshot.connectionState == ConnectionState.waiting) {
-                                items.add(
-                                  const DropdownMenuItem<String?>(
-                                    value: 'loading',
-                                    enabled: false,
-                                    child: Text('טוען...'),
-                                  ),
-                                );
-                              }
-                              
-                              // Add status items
-                              for (final status in statuses) {
-                                final statusIDs = status['StatusIDs'] as List<int>;
-                                final desc = status['Desc'] as String;
-                                final statusIDsValue = statusIDs.join(',');
-                                final statusIDsDisplay = statusIDs.length > 1 
-                                  ? statusIDs.join(', ')
-                                  : statusIDs.first.toString();
-                                items.add(
-                                  DropdownMenuItem<String?>(
-                                    value: statusIDsValue,
-                                    child: Text('$desc ($statusIDsDisplay)'),
-                                  ),
-                                );
-                              }
-                              
-                              // Check if current filter value exists in the items
-                              final hasCurrentValue = currentFilter == null || 
-                                items.any((item) => item.value == currentFilter);
-                              
-                              // If current value doesn't exist in items, use null to avoid assertion error
-                              // But keep the filter active in the provider (it will still filter threads)
-                              final displayValue = hasCurrentValue ? currentFilter : null;
-                              
-                              return DropdownButtonFormField<String?>(
-                                value: displayValue,
-                                decoration: const InputDecoration(
-                                  labelText: 'סטטוס',
-                                  border: OutlineInputBorder(),
-                                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                ),
-                                items: items,
-                                onChanged: snapshot.connectionState == ConnectionState.waiting 
-                                  ? null 
-                                  : (value) {
-                                      final memesProvider = Provider.of<MemesProvider>(context, listen: false);
-                                      threadProvider.setStatusFilter(
-                                        topicId, 
-                                        value,
-                                        availableMemes: memesProvider.hasMemes ? memesProvider.memes : null,
-                                      );
-                                    },
-                                isExpanded: true,
-                              );
-                            },
-                          ),
+                              child: Builder(
+                                builder: (context) {
+                                  // Get current filter value
+                                  final currentFilter = threadProvider.statusFilter;
+
+                                  // Build items list first
+                                  final items = <DropdownMenuItem<String?>>[
+                                    const DropdownMenuItem<String?>(
+                                      value: null,
+                                      child: Text('הכל'),
+                                    ),
+                                  ];
+
+                                  if (snapshot.connectionState == ConnectionState.waiting) {
+                                    items.add(
+                                      const DropdownMenuItem<String?>(
+                                        value: 'loading',
+                                        enabled: false,
+                                        child: Text('טוען...'),
+                                      ),
+                                    );
+                                  }
+
+                                  // Add status items
+                                  for (final status in statuses) {
+                                    final statusIDs = status['StatusIDs'] as List<int>;
+                                    final desc = status['Desc'] as String;
+                                    final statusIDsValue = statusIDs.join(',');
+                                    final statusIDsDisplay = statusIDs.length > 1 ? statusIDs.join(', ') : statusIDs.first.toString();
+                                    items.add(
+                                      DropdownMenuItem<String?>(
+                                        value: statusIDsValue,
+                                        child: Text('$desc ($statusIDsDisplay)'),
+                                      ),
+                                    );
+                                  }
+
+                                  // Check if current filter value exists in the items
+                                  final hasCurrentValue =
+                                      currentFilter == null || items.any((item) => item.value == currentFilter);
+
+                                  // If current value doesn't exist in items, use null to avoid assertion error
+                                  // But keep the filter active in the provider (it will still filter threads)
+                                  final displayValue = hasCurrentValue ? currentFilter : null;
+
+                                  return DropdownButtonFormField<String?>(
+                                    value: displayValue,
+                                    decoration: const InputDecoration(
+                                      labelText: 'סטטוס',
+                                      border: OutlineInputBorder(),
+                                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    ),
+                                    items: items,
+                                    onChanged: snapshot.connectionState == ConnectionState.waiting
+                                        ? null
+                                        : (value) {
+                                            final memesProvider = Provider.of<MemesProvider>(context, listen: false);
+                                            threadProvider.setStatusFilter(
+                                              widget.topicId,
+                                              value,
+                                              availableMemes: memesProvider.hasMemes ? memesProvider.memes : null,
+                                            );
+                                          },
+                                    isExpanded: true,
+                                  );
+                                },
+                              ),
+                            );
+                          },
                         );
                       },
                     );
@@ -266,15 +290,39 @@ class ThreadListScreen extends StatelessWidget {
                   return Consumer<MemesProvider>(
                     builder: (context, memesProvider, _) {
                       // Load threads when provider is first created
-                      // Ensure default filter '114' is applied on first load
                       if (provider.threads.isEmpty && !provider.isLoading) {
                         WidgetsBinding.instance.addPostFrameCallback((_) {
-                          // If statusFilter is null, set it to default '114' before loading
-                          if (provider.statusFilter == null) {
-                            provider.setStatusFilter(topicId, '114', availableMemes: memesProvider.hasMemes ? memesProvider.memes : null);
-                          } else {
-                            provider.loadThreads(topicId, availableMemes: memesProvider.hasMemes ? memesProvider.memes : null);
-                          }
+                          if (_didInitialThreadLoad) return;
+                          _didInitialThreadLoad = true;
+
+                          // For "חוקים מהמליאה": ALWAYS load with status filter (default 114) to avoid
+                          // downloading the full 5,614-thread list.
+                          _isKnessetBillsTopicFuture.then((isKnessetBillsTopic) async {
+                            if (!context.mounted) return;
+
+                            if (isKnessetBillsTopic) {
+                              if (!_didInitKnessetDefaultFilter && provider.statusFilter == null) {
+                                _didInitKnessetDefaultFilter = true;
+                                await provider.setStatusFilter(
+                                  widget.topicId,
+                                  '114',
+                                  availableMemes: memesProvider.hasMemes ? memesProvider.memes : null,
+                                );
+                              } else {
+                                await provider.loadThreads(
+                                  widget.topicId,
+                                  availableMemes: memesProvider.hasMemes ? memesProvider.memes : null,
+                                );
+                              }
+                              return;
+                            }
+
+                            // Other topics: do not filter.
+                            await provider.loadThreads(
+                              widget.topicId,
+                              availableMemes: memesProvider.hasMemes ? memesProvider.memes : null,
+                            );
+                          });
                         });
                       }
                       
@@ -306,7 +354,7 @@ class ThreadListScreen extends StatelessWidget {
                               Text('Error: ${provider.error}'),
                               const SizedBox(height: 16),
                               ElevatedButton(
-                                onPressed: () => provider.loadThreads(topicId, availableMemes: memesProvider.hasMemes ? memesProvider.memes : null),
+                                onPressed: () => provider.loadThreads(widget.topicId, availableMemes: memesProvider.hasMemes ? memesProvider.memes : null),
                                 child: const Text('Retry'),
                               ),
                             ],
@@ -321,7 +369,7 @@ class ThreadListScreen extends StatelessWidget {
                       }
                     
                       // Check if we're viewing the memes topic
-                      final isMemesTopic = memesProvider.isMemesTopic(topicId);
+                      final isMemesTopic = memesProvider.isMemesTopic(widget.topicId);
                       
                       if (isMemesTopic) {
                         // For memes topic: show ALL threads as meme cards with images
@@ -404,7 +452,7 @@ class ThreadListScreen extends StatelessWidget {
                                                   'Bill ID: ${thread.billId}',
                                                   style: TextStyle(
                                                     fontSize: 12,
-                                                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                                                    color: Theme.of(context).colorScheme.onSurface.withAlpha(153),
                                                   ),
                                                 ),
                                               // Show status description from metadata (populated by backend)
@@ -481,12 +529,12 @@ class ThreadListScreen extends StatelessWidget {
             final result = await Navigator.pushNamed(
               context,
               '/create-thread',
-              arguments: topicId,
+              arguments: widget.topicId,
             );
             // Refresh threads if a thread was created
             if (result != null && context.mounted) {
               final provider = Provider.of<ThreadProvider>(context, listen: false);
-              await provider.loadThreads(topicId);
+              await provider.loadThreads(widget.topicId);
             }
           },
           child: const Icon(Icons.add),

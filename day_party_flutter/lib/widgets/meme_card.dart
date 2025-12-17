@@ -39,8 +39,8 @@ class MemeCard extends StatelessWidget {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              theme.colorScheme.primaryContainer.withOpacity(0.3),
-              theme.colorScheme.secondaryContainer.withOpacity(0.3),
+              theme.colorScheme.primaryContainer.withAlpha(77),
+              theme.colorScheme.secondaryContainer.withAlpha(77),
             ],
           ),
         ),

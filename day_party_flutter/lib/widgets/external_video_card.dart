@@ -96,8 +96,8 @@ class ExternalVideoCard extends StatelessWidget {
               child: attachment.provider == 'youtube' && !kIsWeb
                   ? _buildYouTubeEmbed()
                   : kIsWeb
-                      ? _buildWebEmbed(embedUrl!)
-                      : _buildMobileEmbed(embedUrl!),
+                      ? _buildWebEmbed(embedUrl)
+                      : _buildMobileEmbed(embedUrl),
             )
           // Fallback to thumbnail with play button
           else if (hasThumbnail)

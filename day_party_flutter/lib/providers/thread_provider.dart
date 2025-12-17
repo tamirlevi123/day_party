@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:math';
 import '../models/thread.dart';
 import '../services/topic_service.dart';
+import '../core/logger.dart';
 
 class ThreadProvider with ChangeNotifier {
   final TopicService _topicService = TopicService();
@@ -9,7 +10,8 @@ class ThreadProvider with ChangeNotifier {
   List<ThreadSummary> _threads = [];
   bool _isLoading = false;
   String? _error;
-  String? _statusFilter = '114'; // Default filter to status 114 (as comma-separated string)
+  // Knesset status filter (comma-separated StatusIDs). Must only be used for the Knesset bills topic.
+  String? _statusFilter;
   // Map of position index to meme thread - stores which meme should be shown at each position
   Map<int, ThreadSummary> _memeAssignments = {};
 
@@ -71,29 +73,29 @@ class ThreadProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      print('🔍 ThreadProvider: Loading threads for topic $topicId with statusFilter: $_statusFilter');
+      appLogger.d('🔍 ThreadProvider: Loading threads for topic $topicId with statusFilter: $_statusFilter');
       _threads = await _topicService.getTopicThreads(topicId, statusIDs: _statusFilter);
       _error = null;
       
-      print('🔍 ThreadProvider: Loaded ${_threads.length} threads');
+      appLogger.d('🔍 ThreadProvider: Loaded ${_threads.length} threads');
       if (_threads.isNotEmpty) {
-        print('🔍 ThreadProvider: First 3 thread IDs: ${_threads.take(3).map((t) => t.threadId).join(", ")}');
-        print('🔍 ThreadProvider: First 3 thread titles: ${_threads.take(3).map((t) => t.title).join(" | ")}');
+        appLogger.d('🔍 ThreadProvider: First 3 thread IDs: ${_threads.take(3).map((t) => t.threadId).join(", ")}');
+        appLogger.d('🔍 ThreadProvider: First 3 thread titles: ${_threads.take(3).map((t) => t.title).join(" | ")}');
         
         // Check metadata presence
         final threadsWithMetadata = _threads.where((t) => t.billStatusID != null).length;
         final threadsWithoutMetadata = _threads.length - threadsWithMetadata;
-        print('🔍 ThreadProvider: Threads with billStatusID: $threadsWithMetadata, without: $threadsWithoutMetadata');
+        appLogger.d('🔍 ThreadProvider: Threads with billStatusID: $threadsWithMetadata, without: $threadsWithoutMetadata');
         
         if (_threads.any((t) => t.billStatusID != null)) {
           final statusIds = _threads.where((t) => t.billStatusID != null).map((t) => t.billStatusID).toSet();
-          print('🔍 ThreadProvider: Unique billStatusIDs in threads: ${statusIds.join(", ")}');
+          appLogger.d('🔍 ThreadProvider: Unique billStatusIDs in threads: ${statusIds.join(", ")}');
         } else {
-          print('⚠️ ThreadProvider: WARNING - No threads have billStatusID! Filter may not be working.');
+          appLogger.w('⚠️ ThreadProvider: WARNING - No threads have billStatusID! Filter may not be working.');
           // Show sample of first thread's metadata structure
           if (_threads.isNotEmpty) {
             final firstThread = _threads.first;
-            print('🔍 ThreadProvider: Sample thread metadata - billId: ${firstThread.billId}, billStatusID: ${firstThread.billStatusID}');
+            appLogger.d('🔍 ThreadProvider: Sample thread metadata - billId: ${firstThread.billId}, billStatusID: ${firstThread.billStatusID}');
           }
         }
       }
@@ -104,7 +106,7 @@ class ThreadProvider with ChangeNotifier {
       }
     } catch (e) {
       _error = e.toString();
-      print('❌ ThreadProvider: Error loading threads: $e');
+      appLogger.e('❌ ThreadProvider: Error loading threads', error: e);
     } finally {
       _isLoading = false;
       notifyListeners();

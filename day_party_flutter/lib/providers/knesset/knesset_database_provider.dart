@@ -55,9 +55,9 @@ class KnessetDatabaseProvider with ChangeNotifier {
   }
 
   /// Get all statuses
-  Future<List<Map<String, dynamic>>> getAllStatuses() async {
-    appLogger.i('🟣 KnessetDatabaseProvider: getAllStatuses called');
-    final statuses = await _service.getAllStatuses();
+  Future<List<Map<String, dynamic>>> getAllStatuses({int? knessetNum}) async {
+    appLogger.i('🟣 KnessetDatabaseProvider: getAllStatuses called (knessetNum=$knessetNum)');
+    final statuses = await _service.getAllStatuses(knessetNum: knessetNum);
     appLogger.i('🟣 KnessetDatabaseProvider: Received ${statuses.length} statuses from service');
     if (statuses.isEmpty) {
       appLogger.w('🟣 KnessetDatabaseProvider: WARNING - No statuses returned from service!');
