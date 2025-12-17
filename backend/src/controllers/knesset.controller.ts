@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import { getCurrentDatabaseName, listMySqlTablesLike, resolveMySqlTableName } from '../utils/mysql-table.util';
 
 const prisma = new PrismaClient();
 
@@ -10,7 +11,37 @@ const prisma = new PrismaClient();
 export const getStatuses = async (_req: Request, res: Response): Promise<Response | void> => {
   try {
     console.log('[KnessetController] getStatuses called');
-    console.log('[SQL] Querying _KNS_Status table...');
+
+    const tableName = await resolveMySqlTableName(prisma, [
+      '_KNS_Status',
+      '_kns_status',
+      'KNS_Status',
+      'KNS_Statuses',
+      'kns_status',
+      'kns_statuses',
+    ]);
+
+    if (!tableName) {
+      const db = await getCurrentDatabaseName(prisma);
+      const knessetTables = await listMySqlTablesLike(prisma, '%KNS%');
+      console.error('[KnessetController] Knesset status table not found in DB', {
+        db,
+        expected: '_KNS_Status',
+        foundKnessetTables: knessetTables.slice(0, 50),
+        foundCount: knessetTables.length,
+      });
+      return res.status(500).json({
+        error: 'internal_error',
+        message: 'Knesset status table not found on server database',
+        details: {
+          expectedTable: '_KNS_Status',
+          db,
+          foundKnessetTablesCount: knessetTables.length,
+        },
+      });
+    }
+
+    console.log(`[SQL] Querying status table: ${tableName}`);
     
     const statuses = await prisma.$queryRawUnsafe<Array<{
       StatusID: number;
@@ -19,7 +50,7 @@ export const getStatuses = async (_req: Request, res: Response): Promise<Respons
       TypeDesc: string | null;
     }>>(`
       SELECT StatusID, \`Desc\`, TypeID, TypeDesc
-      FROM \`_KNS_Status\`
+      FROM \`${tableName}\`
       ORDER BY TypeID, \`Desc\`
     `);
 
@@ -45,6 +76,12 @@ export const getStatuses = async (_req: Request, res: Response): Promise<Respons
     });
   } catch (error: any) {
     console.error('[KnessetController] Error fetching statuses:', error);
+    console.error('[KnessetController] Error details:', {
+      name: error?.name,
+      code: error?.code,
+      message: error?.message,
+      meta: error?.meta,
+    });
     console.error('[KnessetController] Error stack:', error.stack);
     return res.status(500).json({
       error: 'internal_error',
@@ -119,18 +156,46 @@ export const getBills = async (req: Request, res: Response): Promise<Response | 
     }
 
     let query: string;
+    const billTable = await resolveMySqlTableName(prisma, [
+      '_KNS_Bill',
+      '_kns_bill',
+      'KNS_Bill',
+      'KNS_Bills',
+      'kns_bill',
+      'kns_bills',
+    ]);
+
+    if (!billTable) {
+      const db = await getCurrentDatabaseName(prisma);
+      const knessetTables = await listMySqlTablesLike(prisma, '%KNS%');
+      console.error('[KnessetController] Knesset bill table not found in DB', {
+        db,
+        expected: '_KNS_Bill',
+        foundKnessetTables: knessetTables.slice(0, 50),
+        foundCount: knessetTables.length,
+      });
+      return res.status(500).json({
+        error: 'internal_error',
+        message: 'Knesset bill table not found on server database',
+        details: {
+          expectedTable: '_KNS_Bill',
+          db,
+          foundKnessetTablesCount: knessetTables.length,
+        },
+      });
+    }
 
     if (statusID !== null) {
       query = `
         SELECT *
-        FROM \`_KNS_Bill\`
+        FROM \`${billTable}\`
         WHERE KnessetNum = ${knessetNum} AND StatusID = ${statusID}
         ORDER BY PublicationDate DESC, BillID DESC
       `;
     } else {
       query = `
         SELECT *
-        FROM \`_KNS_Bill\`
+        FROM \`${billTable}\`
         WHERE KnessetNum = ${knessetNum}
         ORDER BY PublicationDate DESC, BillID DESC
       `;
@@ -144,6 +209,12 @@ export const getBills = async (req: Request, res: Response): Promise<Response | 
     });
   } catch (error: any) {
     console.error('Error fetching bills:', error);
+    console.error('[KnessetController] Bills error details:', {
+      name: error?.name,
+      code: error?.code,
+      message: error?.message,
+      meta: error?.meta,
+    });
     return res.status(500).json({
       error: 'internal_error',
       message: 'Failed to fetch bills',
@@ -167,6 +238,25 @@ export const getBillDocuments = async (req: Request, res: Response): Promise<Res
       });
     }
 
+    const docTable = await resolveMySqlTableName(prisma, [
+      '_KNS_DocumentBill',
+      '_kns_documentbill',
+      'KNS_DocumentBill',
+      'KNS_DocumentBills',
+    ]);
+
+    if (!docTable) {
+      const db = await getCurrentDatabaseName(prisma);
+      return res.status(500).json({
+        error: 'internal_error',
+        message: 'Knesset document table not found on server database',
+        details: {
+          expectedTable: '_KNS_DocumentBill',
+          db,
+        },
+      });
+    }
+
     const documents = await prisma.$queryRawUnsafe<Array<{
       DocumentBillID: string;
       BillID: number;
@@ -186,7 +276,7 @@ export const getBillDocuments = async (req: Request, res: Response): Promise<Res
         ApplicationDesc,
         FilePath,
         LastUpdatedDate
-      FROM \`_KNS_DocumentBill\`
+      FROM \`${docTable}\`
       WHERE BillID = ${billId}
       ORDER BY GroupTypeID, ApplicationID, DocumentBillID
     `);
@@ -198,9 +288,56 @@ export const getBillDocuments = async (req: Request, res: Response): Promise<Res
     });
   } catch (error: any) {
     console.error('Error fetching bill documents:', error);
+    console.error('[KnessetController] Documents error details:', {
+      name: error?.name,
+      code: error?.code,
+      message: error?.message,
+      meta: error?.meta,
+    });
     return res.status(500).json({
       error: 'internal_error',
       message: 'Failed to fetch bill documents',
+    });
+  }
+};
+
+/**
+ * GET /api/knesset/diagnostics
+ * Returns information about Knesset tables on the current MySQL database.
+ * Useful for debugging VM-only failures.
+ */
+export const getKnessetDiagnostics = async (_req: Request, res: Response): Promise<Response | void> => {
+  try {
+    const db = await getCurrentDatabaseName(prisma);
+    const knessetTables = await listMySqlTablesLike(prisma, '%KNS%');
+
+    const resolved = {
+      statusTable: await resolveMySqlTableName(prisma, ['_KNS_Status', '_kns_status', 'KNS_Status', 'KNS_Statuses']),
+      billTable: await resolveMySqlTableName(prisma, ['_KNS_Bill', '_kns_bill', 'KNS_Bill', 'KNS_Bills']),
+      documentBillTable: await resolveMySqlTableName(prisma, ['_KNS_DocumentBill', '_kns_documentbill', 'KNS_DocumentBill']),
+      committeeTable: await resolveMySqlTableName(prisma, ['_KNS_Committee', '_kns_committee', 'KNS_Committee', 'KNS_Committees']),
+    };
+
+    let statusCount: number | null = null;
+    if (resolved.statusTable) {
+      const rows = await prisma.$queryRawUnsafe<Array<{ c: number }>>(
+        `SELECT COUNT(*) as c FROM \`${resolved.statusTable}\``
+      );
+      statusCount = rows?.[0]?.c ?? null;
+    }
+
+    return res.status(200).json({
+      db,
+      knessetTablesCount: knessetTables.length,
+      knessetTables: knessetTables.slice(0, 200),
+      resolved,
+      statusCount,
+    });
+  } catch (error: any) {
+    console.error('[KnessetController] Diagnostics error:', error);
+    return res.status(500).json({
+      error: 'internal_error',
+      message: 'Failed to fetch knesset diagnostics',
     });
   }
 };

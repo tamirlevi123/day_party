@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { resolveMySqlTableName } from '../utils/mysql-table.util';
 
 const prisma = new PrismaClient();
 
@@ -16,10 +17,26 @@ let isLoaded = false;
 export async function loadStatusCache(): Promise<void> {
   try {
     console.log('[KnessetStatus] Loading status cache from MySQL...');
-    
+
+    const tableName = await resolveMySqlTableName(prisma, [
+      '_KNS_Status',
+      '_kns_status',
+      'KNS_Status',
+      'KNS_Statuses',
+      'kns_status',
+      'kns_statuses',
+    ]);
+
+    if (!tableName) {
+      console.error('[KnessetStatus] Could not resolve status table name. Cache will remain empty.');
+      isLoaded = false;
+      statusCache.clear();
+      return;
+    }
+
     const sqlQuery = `
       SELECT StatusID, \`Desc\`
-      FROM \`_KNS_Status\`
+      FROM \`${tableName}\`
     `;
     console.log(`[SQL] Executing status cache query:`);
     console.log(`[SQL] ${sqlQuery}`);
